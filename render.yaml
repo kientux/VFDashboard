@@ -32,7 +32,7 @@ services:
         fromService:
           type: web
           name: vfdashboard-backend
-          property: host
+          property: url
     # Tự động prefix https:// cho PUBLIC_API_URL nếu cần
     # Tuy nhiên, Astro PUBLIC_API_URL thường được đọc ở build time
     # Nếu Render Docker build chạy sau khi env được set, nó sẽ ok.
