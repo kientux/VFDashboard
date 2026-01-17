@@ -36,8 +36,8 @@ You can get the whole system running in minutes.
 ### Installation
 1.  **Clone the repository**:
     ```bash
-    git clone https://github.com/your-username/vfdashboard.git
-    cd vfdashboard
+    git clone https://github.com/VF9-Club/VFDashboard.git
+    cd VFDashboard
     ```
 
 2.  **Start the Backend (API Service)**:
