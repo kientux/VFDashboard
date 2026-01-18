@@ -28,35 +28,34 @@ compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = "./dist"
 ```
 
-## 2. Deployment Options
+## 2. Deployment (CLI Method - Recommended)
 
-### Option A: Git Integration (Recommended)
+We use **Direct Upload** via the Wrangler CLI. This is faster and gives you more control than the automatic Git integration.
 
-This gives you **automatic deployments** on every push.
-
-1.  Push your code to GitHub/GitLab.
-2.  Log in to [Cloudflare Dashboard](https://dash.cloudflare.com) > **Workers & Pages**.
-3.  Click **Create Application** > **Pages** > **Connect to Git**.
-4.  Select `VFDashBoard`.
-5.  **Build Settings:**
-    - **Framework Preset:** `Astro`
-    - **Build Command:** `npm run build`
-    - **Build Output:** `dist`
-    - **Root Directory:** `/` (or leave empty)
-
-### Option B: CLI Deployment (Fastest)
-
-Deploy directly from your terminal without waiting for Git CI.
-
-1.  **Login** (One time):
+### Prerequisites (One-time setup)
+1.  **Login to Cloudflare:**
     ```bash
     npx wrangler login
     ```
-2.  **Build & Deploy**:
+2.  **Create the Project** (Required only once):
     ```bash
-    npm run build
-    npx wrangler pages deploy dist
+    npx wrangler pages project create vfdashboard --production-branch main
     ```
+
+### How to Deploy
+Run this single command whenever you want to publish changes:
+
+```bash
+npm run deploy
+```
+
+This command will:
+1.  **Build** the project (`npm run build`).
+2.  **Upload** local files to Cloudflare Pages.
+
+### Option B: Cloudflare Git Integration (Alternative)
+*Not recommended for this setup as it requires manual dashboard configuration.*
+If you prefer this, connect your Git repo in the Cloudflare Dashboard and set the build command to `npm run build` and output directory to `/dist`.
 
 ## 3. Local Development (Platform Proxy)
 

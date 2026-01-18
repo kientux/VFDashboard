@@ -2,6 +2,18 @@ export const prerender = false;
 
 import { REGIONS } from "../../config/vinfast";
 
+export const GET = async () => {
+  return new Response(
+    JSON.stringify({
+      message: "Login API is active. Use POST to authenticate.",
+    }),
+    {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+};
+
 export const POST = async ({ request }) => {
   try {
     const { email, password, region } = await request.json();
