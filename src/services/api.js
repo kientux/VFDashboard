@@ -16,6 +16,7 @@ class VinFastAPI {
     this.vin = null;
     this.userId = null;
     this.aliasMappings = staticAliasMap;
+    this.rememberMe = false;
 
     // Load session on init
     this.restoreSession();
@@ -26,36 +27,100 @@ class VinFastAPI {
     this.regionConfig = REGIONS[region] || REGIONS[DEFAULT_REGION];
   }
 
+  // Cookie Helpers
+  setCookie(name, value, days) {
+    if (typeof document === "undefined") return;
+    let expires = "";
+    if (days) {
+      const date = new Date();
+      date.setTime(date.getTime() + days * 24 * 60 * 60 * 1000);
+      expires = "; expires=" + date.toUTCString();
+    }
+    document.cookie = name + "=" + (JSON.stringify(value) || "") + expires + "; path=/; SameSite=Lax";
+  }
+
+  getCookie(name) {
+    if (typeof document === "undefined") return null;
+    const nameEQ = name + "=";
+    const ca = document.cookie.split(";");
+    for (let i = 0; i < ca.length; i++) {
+      let c = ca[i];
+      while (c.charAt(0) === " ") c = c.substring(1, c.length);
+      if (c.indexOf(nameEQ) === 0) {
+        try {
+          return JSON.parse(c.substring(nameEQ.length, c.length));
+        } catch (e) {
+          return null;
+        }
+      }
+    }
+    return null;
+  }
+
+  deleteCookie(name) {
+    if (typeof document === "undefined") return;
+    document.cookie = name + "=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+  }
+
   saveSession() {
-    if (typeof window === "undefined" || typeof localStorage === "undefined") return;
+    if (typeof window === "undefined") return;
     try {
-      localStorage.setItem(
-        "vf_session",
-        JSON.stringify({
-          accessToken: this.accessToken,
-          refreshToken: this.refreshToken,
-          vin: this.vin,
-          userId: this.userId,
-          region: this.region,
-          timestamp: Date.now(),
-        }),
-      );
+      // Also clear legacy localStorage if exists
+      if (typeof localStorage !== "undefined" && localStorage.getItem("vf_session")) {
+        localStorage.removeItem("vf_session");
+      }
+
+      const data = {
+        accessToken: this.accessToken,
+        refreshToken: this.refreshToken,
+        vin: this.vin,
+        userId: this.userId,
+        region: this.region,
+        rememberMe: this.rememberMe,
+        timestamp: Date.now(),
+      };
+
+      // If rememberMe is true, save for 30 days. Otherwise session only (null days).
+      this.setCookie("vf_session", data, this.rememberMe ? 30 : null);
     } catch (e) {
-      // localStorage not available
+      console.error("Failed to save session", e);
     }
   }
 
   restoreSession() {
-    if (typeof window === "undefined" || typeof localStorage === "undefined") return;
+    if (typeof window === "undefined") return;
     try {
-      const raw = localStorage.getItem("vf_session");
-      if (raw) {
-        const data = JSON.parse(raw);
+      // Try cookie first
+      let data = this.getCookie("vf_session");
+
+      // Fallback to localStorage for migration
+      if (!data && typeof localStorage !== "undefined") {
+        const raw = localStorage.getItem("vf_session");
+        if (raw) {
+          data = JSON.parse(raw);
+          // Migrate to cookie immediately (session only by default if not specified)
+          this.accessToken = data.accessToken;
+          this.refreshToken = data.refreshToken;
+          this.vin = data.vin;
+          this.userId = data.userId;
+          if (data.region) this.setRegion(data.region);
+          this.saveSession(); // Will save as session cookie since rememberMe is false by default
+        }
+      }
+
+      if (data) {
         this.accessToken = data.accessToken;
         this.refreshToken = data.refreshToken;
         this.vin = data.vin;
         this.userId = data.userId;
+        this.rememberMe = !!data.rememberMe;
         if (data.region) this.setRegion(data.region);
+
+        // Proactive Refresh "Renew Mechanism"
+        if (this.refreshToken) {
+          // Trigger refresh in background to ensure token validity
+          this.refreshAccessToken().catch(e => console.warn("Background refresh failed", e));
+        }
       }
     } catch (e) {
       console.error("Failed to restore session", e);
@@ -63,16 +128,16 @@ class VinFastAPI {
   }
 
   clearSession() {
-    if (typeof window === "undefined" || typeof localStorage === "undefined") return;
-    try {
+    if (typeof window === "undefined") return;
+    this.deleteCookie("vf_session");
+    if (typeof localStorage !== "undefined") {
       localStorage.removeItem("vf_session");
-    } catch (e) {
-      // localStorage not available
     }
     this.accessToken = null;
     this.refreshToken = null;
     this.vin = null;
     this.userId = null;
+    this.rememberMe = false;
   }
 
   _getHeaders() {
@@ -98,8 +163,10 @@ class VinFastAPI {
     return headers;
   }
 
-  async authenticate(email, password, region = "vn") {
+  async authenticate(email, password, region = "vn", rememberMe = false) {
     this.setRegion(region);
+    this.rememberMe = rememberMe;
+
     // Use local proxy
     const url = `/api/login`;
     const payload = {
@@ -163,12 +230,33 @@ class VinFastAPI {
   async refreshAccessToken() {
     if (!this.refreshToken) return false;
 
-    // TODO: Implement Refresh Proxy if needed.
-    // For now, logging out is safer than complex refresh logic without a dedicated endpoint which we haven't built yet.
-    // Ideally we add /api/refresh.
-    console.warn("Token Refresh not fully implemented via Proxy. Logging out.");
-    this.clearSession();
-    return false;
+    try {
+      const response = await fetch("/api/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          refresh_token: this.refreshToken,
+          region: this.region,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        this.accessToken = data.access_token;
+        // Some providers rotate refresh tokens, some don't. Update if provided.
+        if (data.refresh_token) {
+          this.refreshToken = data.refresh_token;
+        }
+        this.saveSession(); // Update cookie expiration
+        return true;
+      } else {
+        console.warn("Refresh token failed:", await response.text());
+        return false;
+      }
+    } catch (e) {
+      console.error("Refresh token error:", e);
+      return false;
+    }
   }
 
   async _fetchWithRetry(url, options = {}) {
