@@ -1,1 +1,35 @@
 @import "tailwindcss";
+
+@layer utilities {
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 20px);
+  }
+}
+
+/* Custom Animations for Mobile Transitions */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes zoomIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-in.fade-in {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+.animate-in.slide-in-from-bottom-8 {
+  animation: slideUp 0.5s ease-out forwards;
+}
+
+.animate-in.zoom-in-95 {
+  animation: zoomIn 0.5s ease-out forwards;
+}

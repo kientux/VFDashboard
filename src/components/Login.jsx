@@ -97,12 +97,12 @@ export default function Login({ bgImage }) {
               </div>
             </div>
           )}
-          <div className="flex justify-center mb-6">
+          <div className="flex justify-center mb-4">
             {/* VinFast Logo */}
             <img
               src="/vinfast-logo.png"
               alt="VinFast"
-              className="h-10 object-contain"
+              className="w-full h-auto max-h-24 object-contain px-2"
             />
           </div>
 

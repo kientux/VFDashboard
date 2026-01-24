@@ -345,7 +345,11 @@ class VinFastAPI {
     try {
       const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`;
       // Nominatim requires a User-Agent, browsers send one automatically but let's be polite if possible
-      const res = await fetch(url);
+      const res = await fetch(url, {
+        headers: {
+          "User-Agent": "VFDashboard/2.0",
+        },
+      });
       if (res.ok) {
         const data = await res.json();
         const a = data.address || {};
@@ -457,30 +461,39 @@ class VinFastAPI {
     // Enrich with Location/Weather if coordinates exist
     if (parsed.latitude && parsed.longitude) {
       try {
-        // Create a timeout promise
-        const timeout = new Promise((resolve) =>
-          setTimeout(() => resolve([null, null]), 2000),
+        console.log(`Enriching data for ${parsed.latitude}, ${parsed.longitude}`);
+        
+        // Create a timeout promise that rejects
+        const timeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Enrichment timed out")), 5000),
         );
 
-        // Race between data fetch and timeout
-        const [geo, weather] = await Promise.race([
-          Promise.all([
-            this.fetchLocationName(parsed.latitude, parsed.longitude),
-            this.fetchWeather(parsed.latitude, parsed.longitude),
-          ]),
-          timeout,
+        // Fetch both independently so one doesn't fail the other
+        const results = await Promise.allSettled([
+          Promise.race([this.fetchLocationName(parsed.latitude, parsed.longitude), timeout]),
+          Promise.race([this.fetchWeather(parsed.latitude, parsed.longitude), timeout])
         ]);
 
-        if (geo) {
+        const geoResult = results[0];
+        const weatherResult = results[1];
+
+        if (geoResult.status === "fulfilled" && geoResult.value) {
+          const geo = geoResult.value;
           parsed.location_address = geo.location_address;
           parsed.weather_address = geo.weather_address;
+        } else {
+            console.warn("Location fetch failed or timed out", geoResult.reason);
         }
-        if (weather) {
+
+        if (weatherResult.status === "fulfilled" && weatherResult.value) {
+          const weather = weatherResult.value;
           parsed.weather_outside_temp = weather.temperature;
           parsed.weather_code = weather.weathercode;
+        } else {
+            console.warn("Weather fetch failed or timed out", weatherResult.reason);
         }
       } catch (e) {
-        console.warn("External enrichment failed or timed out", e);
+        console.warn("External enrichment failed critically", e);
         // Continue without enrichment
       }
     }
