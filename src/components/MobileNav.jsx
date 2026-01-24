@@ -12,22 +12,22 @@ const NavItem = ({ id, label, icon, active, onClick }) => {
   return (
     <button
       onClick={() => handleClick(id)}
-      className={`relative flex-1 flex flex-col items-center justify-center h-full transition-all duration-300 rounded-full z-10 group ${active ? "text-blue-500" : "text-gray-400 hover:text-gray-200"}`}
+      className={`relative flex-1 flex flex-col items-center justify-center h-full transition-all duration-500 rounded-full z-10 group ${active ? "text-blue-600" : "text-gray-500"}`}
     >
-      {/* Active Background Glow */}
+      {/* Active Background Pill */}
       <div
-        className={`absolute inset-1 transition-all duration-300 rounded-full ${active ? "bg-white/10 shadow-[inset_0_1px_4px_rgba(255,255,255,0.1)] opacity-100" : "opacity-0"}`}
+        className={`absolute inset-1 transition-all duration-500 rounded-full ${active ? "bg-blue-100/60 shadow-[inset_0_2px_6px_rgba(59,130,246,0.15)] opacity-100" : "opacity-0"}`}
       ></div>
 
       <div
-        className={`relative transition-all duration-300 ${active ? "scale-110 -translate-y-1" : "translate-y-0 group-hover:-translate-y-0.5"}`}
+        className={`relative transition-all duration-500 ${active ? "scale-110" : "scale-100"}`}
       >
         {React.cloneElement(icon, {
-          className: `w-6 h-6 transition-all duration-300 ${active ? "text-blue-400 drop-shadow-[0_0_8px_rgba(96,165,250,0.5)]" : "text-gray-400 group-hover:text-gray-300"}`,
+          className: `w-6 h-6 transition-all duration-500 ${active ? "text-blue-600" : "text-gray-500"}`,
         })}
       </div>
       <span
-        className={`absolute bottom-2 text-[10px] font-medium uppercase tracking-wider transition-all duration-300 ${active ? "opacity-100 translate-y-0 text-blue-100" : "opacity-0 translate-y-2"}`}
+        className={`absolute bottom-2 text-[10px] font-medium uppercase tracking-wider transition-all duration-500 ${active ? "opacity-100 translate-y-0 text-blue-600" : "opacity-0 translate-y-2"}`}
       >
         {label}
       </span>
@@ -116,10 +116,10 @@ export default function MobileNav({ activeTab, onTabChange, onScan }) {
   ];
 
   return (
-    <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex flex-col justify-end pb-[env(safe-area-inset-bottom,20px)] pt-4 px-4 bg-gradient-to-t from-gray-900/80 to-transparent pointer-events-none">
+    <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex flex-col justify-end pb-[env(safe-area-inset-bottom,20px)] pt-4 px-4 pointer-events-none">
       <div className="flex justify-center items-center gap-4 pointer-events-auto mb-2">
         {/* Main Nav Pill */}
-        <div className="flex-1 max-w-xs flex items-center bg-gray-800/80 backdrop-blur-xl border border-white/10 rounded-2xl h-16 shadow-[0_8px_32px_rgba(0,0,0,0.3)] ring-1 ring-white/5 overflow-hidden">
+        <div className="flex-1 max-w-xs flex items-center bg-white/40 backdrop-blur-3xl border border-white/50 rounded-full h-16 shadow-lg overflow-hidden">
           {tabs.map((tab) => (
             <NavItem
               key={tab.id}
@@ -133,11 +133,11 @@ export default function MobileNav({ activeTab, onTabChange, onScan }) {
         {/* Scan Button (Floating) */}
         <button
           onClick={handleScan}
-          className="w-16 h-16 flex-shrink-0 flex items-center justify-center bg-blue-600/90 backdrop-blur-md border border-white/20 rounded-2xl shadow-[0_8px_24px_rgba(37,99,235,0.4)] active:scale-95 transition-all duration-300 group hover:bg-blue-500"
+          className="w-16 h-16 flex-shrink-0 flex items-center justify-center bg-white/40 backdrop-blur-3xl border border-white/50 rounded-full shadow-lg active:scale-95 transition-all duration-300 group"
           title="Full Scan"
         >
           <svg
-            className="w-8 h-8 text-white group-hover:rotate-180 transition-transform duration-700"
+            className="w-8 h-8 text-indigo-600 group-hover:rotate-180 transition-transform duration-700"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
