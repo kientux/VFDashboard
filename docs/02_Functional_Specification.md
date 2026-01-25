@@ -43,9 +43,11 @@ _(Refer to `assets/dashboard_preview.webp` for visual style orientation)_
 
 - **FR-B-01**: Show custom vehicle nickname or Model Name.
 - **FR-B-02 (Tires)**: Display 4 callout cards for Tire Pressure (Bar/PSI) and Temperature (C).
-- **FR-B-03 (Doors)**: Visual warning indicators if Doors, Trunk, or Hood are open.
+- **FR-B-03 (Doors & Windows)**:
+  - Visual warning indicators if Doors, Trunk, or Hood are open.
+  - **New**: Status indicator for Windows (Open/Closed/Vented).
 - **FR-B-04 (Odometer)**: Display current total distance (km).
-- **FR-B-05 (Warranty)**: Display Warranty Expiration Date and Mileage Limit.
+- **FR-B-05 (Warranty)**: Display Warranty Expiration Date and Mileage Limit (Implemented).
 - **FR-B-06 (Gear)**: Visual Gear Selector (P, R, N, D, S) indicating current position.
 - **FR-B-07 (Multi-Vehicle)**: Left/Right arrows and pagination dots to switch between vehicles if multiple are linked to the account.
 
@@ -69,7 +71,7 @@ _(Refer to `assets/dashboard_preview.webp` for visual style orientation)_
 
 - **FR-D-01 (Weather)**: List Outside and Inside Temperatures.
 - **FR-D-02 (Climate)**: Display Fan Speed status.
-- **FR-D-03 (Modes)**: Status indicators for **Pet Mode** and **Camp Mode**.
+- **FR-D-03 (Modes)**: Status indicators for **Pet Mode** and **Camp Mode** (Implemented).
 - **FR-D-04 (Location)**: Live Google Maps embed showing current vehicle position (Latitude/Longitude) with custom marker.
 - **FR-D-05**: Display Reverse-Geocoded Address (City, Country).
 
@@ -79,11 +81,13 @@ _(Refer to `assets/dashboard_preview.webp` for visual style orientation)_
 
 - **FR-E-01**: Status List for key subsystems:
   - **Tires**: "All OK" vs "Low Pressure".
-  - **Doors**: "All Closed" vs "Driver Open".
+  - **Doors**: "All Closed" vs "Driver Open" (Specific detail).
+  - **Windows**: "All Closed" vs "Window Open" (New).
   - **Safety**: "System Normal" vs "Thermal Warning".
   - **Service**: "No Alerts" vs "Service Due".
 - **FR-E-02**: Firmware Version display.
 - **FR-E-03**: T-Box Version display.
+- **FR-E-04 (New)**: Handbrake Status (Engaged/Disengaged).
 
 ### Module F: Multi-Vehicle Management
 

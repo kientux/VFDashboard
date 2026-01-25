@@ -2,9 +2,27 @@ import { map } from "nanostores";
 import { api } from "../services/api";
 import { DEFAULT_LOCATION } from "../constants/vehicle";
 
+export interface VehicleInfo {
+  vinCode: string;
+  marketingName?: string;
+  vehicleVariant?: string; // e.g., "PLUS"
+  color?: string; // Hex or Name
+  exteriorColor?: string;
+  interiorColor?: string;
+  yearOfProduct?: number;
+  vehicleName?: string;
+  customizedVehicleName?: string;
+  userVehicleType?: string; // "OWNER" etc.
+  vehicleImage?: string;
+  profileImage?: string;
+  warrantyExpirationDate?: string | null;
+  warrantyMileage?: number | null;
+  vehicleAliasVersion?: string;
+}
+
 export interface VehicleState {
   // Store Metadata
-  vehicles: any[]; // List of all available vehicles (raw API objects)
+  vehicles: VehicleInfo[]; // List of all available vehicles
   vehicleCache: Record<string, Partial<VehicleState>>; // Cache for switched vehicles
 
   battery_level: number | null;
@@ -57,14 +75,20 @@ export interface VehicleState {
   vcu_version?: string;
   bcm_version?: string;
 
-  // System Health / Vehicle Status
+  // Vehicle Status
   firmware_version?: string;
   tbox_version?: string;
   thermal_warning?: string | number; // 1 = Warning, 0 = Normal
   service_alert?: string | number;
+  next_service_mileage?: number | null;
+  next_service_date?: string | null;
+  service_appointment_id?: string | null;
+  service_appointment_status?: string | null;
 
   // Driving Stats
   central_lock_status?: boolean; // True=Locked?
+  handbrake_status?: boolean; // True=Engaged
+  window_status?: string | number; // Window state
 
   // Warranty
   warrantyExpirationDate?: string | null;
@@ -108,6 +132,7 @@ export interface VehicleState {
   fullTelemetryAliases: Record<string, any[]>; // VIN -> Alias Array
   fullTelemetryTimestamps: Record<string, number>; // VIN -> Timestamp
   isScanning: boolean;
+  debugLog?: any[]; // For storing deep scan candidates
 
   lastUpdated: number;
   isRefreshing?: boolean;
@@ -163,6 +188,10 @@ export const vehicleStore = map<VehicleState>({
   trunk_status: false,
   hood_status: false,
 
+  // New Status
+  handbrake_status: false,
+  window_status: undefined,
+
   // Battery Details (Module C)
   target_soc: null,
   remaining_charging_time: null,
@@ -195,12 +224,17 @@ export const vehicleStore = map<VehicleState>({
   tbox_version: "--",
   thermal_warning: 0,
   service_alert: 0,
+  next_service_mileage: null,
+  next_service_date: null,
+  service_appointment_id: null,
+  service_appointment_status: null,
 
   // Full Telemetry Cache
   fullTelemetryData: {},
   fullTelemetryAliases: {},
   fullTelemetryTimestamps: {},
   isScanning: false,
+  debugLog: [],
 
   lastUpdated: Date.now(),
   isRefreshing: false,
@@ -282,6 +316,10 @@ const INITIAL_TELEMETRY: Partial<VehicleState> = {
   trunk_status: false,
   hood_status: false,
 
+  // New Status
+  handbrake_status: false,
+  window_status: undefined,
+
   // Battery
   target_soc: null,
   remaining_charging_time: null,
@@ -313,6 +351,10 @@ const INITIAL_TELEMETRY: Partial<VehicleState> = {
   tbox_version: "--",
   thermal_warning: 0,
   service_alert: 0,
+  next_service_mileage: null,
+  next_service_date: null,
+  service_appointment_id: null,
+  service_appointment_status: null,
 };
 
 const getVehicleBaseState = (
@@ -470,6 +512,49 @@ export const fetchFullTelemetry = async (vin: string, force = false) => {
     }
 
     console.log(`fetchFullTelemetry: Found ${resources.length} resources`);
+
+    // --- DEEP SCAN: FIND INTERESTING ALIASES ---
+    const interestingKeywords = [
+      "SERVICE",
+      "MAINTENANCE",
+      "WARRANTY",
+      "BOOKING",
+      "APPOINTMENT",
+      "NEXT",
+      "SCHEDULE",
+      "OTA",
+      "UPDATE",
+      "FIRMWARE",
+      "VERSION",
+      "ENERGY",
+      "CONSUMPTION",
+      "EFFICIENCY",
+      "TRIP",
+      "HISTORY",
+      "NOTIFICATION",
+      "ALERT",
+      "ERROR",
+      "FAULT",
+      "DIAGNOSTIC",
+      "RECALL",
+      "CAMPAIGN",
+    ];
+
+    const candidates = resources.filter((r: any) => {
+      const name = (r.resourceName || "").toUpperCase();
+      const alias = (r.alias || "").toUpperCase();
+      return interestingKeywords.some(
+        (keyword) => name.includes(keyword) || alias.includes(keyword),
+      );
+    });
+
+    // Always store candidates (even if empty, to clear old data)
+    console.log(
+      `Deep Scan: Found ${candidates.length} interesting aliases`,
+      candidates.slice(0, 10),
+    );
+    vehicleStore.setKey("debugLog", candidates);
+    // ------------------------------------------
 
     // 3. Map to Request Objects
     const requestObjects = resources

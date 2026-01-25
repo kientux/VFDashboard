@@ -35,6 +35,8 @@ export const DEFAULT_LOCATION = {
 export const VEHICLE_STATUS_LABELS = {
   TIRES: "Tires",
   DOORS: "Doors & Locks",
+  WINDOWS: "Windows",
+  HANDBRAKE: "Handbrake",
   SAFETY: "Safety Check",
   SERVICE: "Service",
   FIRMWARE: "Firmware",

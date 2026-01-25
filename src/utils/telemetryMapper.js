@@ -57,6 +57,8 @@ export const TELEMETRY_KEY_MAP = {
   // Additional from get-alias.json
   VEHICLE_STATUS_INTERIOR_TEMPERATURE: "inside_temp",
   VEHICLE_STATUS_IGNITION_STATUS: "ignition_status",
+  VEHICLE_STATUS_HANDBRAKE_STATUS: "handbrake_status",
+  REMOTE_CONTROL_WINDOW_STATUS: "window_status",
 
   // ECU Versions
   ECUS_BMS_SOFTWARE_VERSION: "bms_version",
@@ -156,6 +158,23 @@ export const parseTelemetry = (rawData, pathToAlias) => {
     // Logic Overrides
     if (friendlyKey === "is_locked") val = val == 1;
     if (friendlyKey === "central_lock_status") val = val == 1;
+    if (friendlyKey === "handbrake_status") val = val == 1;
+
+    // Special handling for Service Alerts (JSON parsing)
+    if (friendlyKey === "service_alert" && typeof val === "string") {
+      try {
+        if (val.startsWith("[") || val.startsWith("{")) {
+          const parsed = JSON.parse(val);
+          // If it's an array of appointments, we might want to extract the first one
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            result.service_appointment_id = parsed[0].appointmentId;
+            result.service_appointment_status = parsed[0].status;
+          }
+        }
+      } catch (e) {
+        // Not JSON, keep original value
+      }
+    }
 
     if (friendlyKey && result[friendlyKey] === undefined) {
       result[friendlyKey] = val;
