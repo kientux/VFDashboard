@@ -7,6 +7,7 @@ import {
   switchVehicle,
   refreshVehicle,
 } from "../stores/vehicleStore";
+import { refreshTimerStore, formatCountdown } from "../stores/refreshTimerStore";
 import { api } from "../services/api";
 import AboutModal from "./AboutModal";
 
@@ -138,6 +139,7 @@ const WeatherIcon = ({ temp, code }) => {
 
 export default function VehicleHeader({ onOpenTelemetry }) {
   const vehicle = useStore(vehicleStore);
+  const refreshTimer = useStore(refreshTimerStore);
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [showAbout, setShowAbout] = React.useState(false);
 
@@ -258,6 +260,16 @@ export default function VehicleHeader({ onOpenTelemetry }) {
             </span>
             <span className="text-xs font-mono font-bold tabular-nums leading-none">
               {lastUpdatedTime}
+            </span>
+          </div>
+
+          {/* Countdown Timer */}
+          <div className="hidden md:flex flex-col items-start leading-none pl-2 pr-1 border-l border-gray-200">
+            <span className="text-[8px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">
+              Next Refresh
+            </span>
+            <span className="text-xs font-mono font-bold text-blue-600 tabular-nums leading-none">
+              {refreshTimer.isRefreshing ? 'Refreshing...' : formatCountdown(refreshTimer.timeUntilRefresh)}
             </span>
           </div>
         </button>

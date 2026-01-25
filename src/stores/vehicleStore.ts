@@ -1,6 +1,7 @@
 import { map } from "nanostores";
 import { api } from "../services/api";
 import { DEFAULT_LOCATION } from "../constants/vehicle";
+import { resetRefreshTimer, setRefreshing } from "./refreshTimerStore";
 
 export interface VehicleInfo {
   vinCode: string;
@@ -449,6 +450,7 @@ export const fetchTelemetry = async (vin: string) => {
   // Set refreshing state
   vehicleStore.setKey("isRefreshing", true);
   vehicleStore.setKey("isEnriching", true);
+  setRefreshing(true);
 
   try {
     const data = await api.getTelemetry(vin);
@@ -460,6 +462,8 @@ export const fetchTelemetry = async (vin: string) => {
   } finally {
     vehicleStore.setKey("isRefreshing", false);
     vehicleStore.setKey("isEnriching", false);
+    setRefreshing(false);
+    resetRefreshTimer(); // Reset the countdown timer after successful refresh
     if (!vehicleStore.get().isInitialized) {
       vehicleStore.setKey("isInitialized", true);
     }
