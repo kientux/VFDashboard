@@ -13,7 +13,7 @@ const ALLOWED_PATH_PREFIXES = [
 /**
  * Generate X-HASH for VinFast API request
  * Algorithm: HMAC-SHA256(secretKey, message) -> Base64
- * Message format: method_path_vin_secretKey_timestamp (lowercase)
+ * From HMACInterceptor: method_path_[vin_]secret_timestamp (lowercase)
  */
 function generateXHash(method, apiPath, vin, timestamp, secretKey) {
   // Remove query string from path
@@ -24,7 +24,7 @@ function generateXHash(method, apiPath, vin, timestamp, secretKey) {
     ? pathWithoutQuery
     : "/" + pathWithoutQuery;
 
-  // Build message parts
+  // Build message: method_path_[vin_]secret_timestamp
   const parts = [method, normalizedPath];
   if (vin) {
     parts.push(vin);
@@ -41,6 +41,50 @@ function generateXHash(method, apiPath, vin, timestamp, secretKey) {
 
   // Base64 encode
   return hmac.digest("base64");
+}
+
+/**
+ * Generate X-HASH-2 for VinFast API request
+ * Reverse-engineered from libsecure.so (VFCrypto.signRequest)
+ *
+ * Algorithm:
+ *   1. Strip leading "/" from path
+ *   2. Replace all "/" with "_" in path
+ *   3. Concatenate: platform_[vinCode_]identifier_path_method_timestamp
+ *   4. Lowercase the entire string
+ *   5. HMAC-SHA256 with key "ConnectedCar@6521" (from FUN_0012758c)
+ *   6. Base64 encode result
+ */
+function generateXHash2({ platform, vinCode, identifier, path, method, timestamp }) {
+  // Step 1: Strip leading "/" from path
+  let normalizedPath = path;
+  if (normalizedPath.startsWith("/")) {
+    normalizedPath = normalizedPath.substring(1);
+  }
+
+  // Step 2: Replace "/" with "_" in path
+  normalizedPath = normalizedPath.replace(/\//g, "_");
+
+  // Step 3: Build message parts in order from native code
+  const parts = [platform];
+  if (vinCode) {
+    parts.push(vinCode);
+  }
+  parts.push(identifier);
+  parts.push(normalizedPath);
+  parts.push(method);
+  parts.push(String(timestamp));
+
+  // Step 4: Join with "_" and lowercase
+  const message = parts.join("_").toLowerCase();
+
+  // Step 5: HMAC-SHA256 with native secret key
+  const hash2Key = "ConnectedCar@6521";
+  const hmac = crypto.createHmac("sha256", hash2Key);
+  hmac.update(message);
+  const hash2 = hmac.digest("base64");
+
+  return hash2;
 }
 
 export const ALL = async ({ request, params, cookies, locals }) => {
@@ -85,50 +129,67 @@ export const ALL = async ({ request, params, cookies, locals }) => {
     requestBody = await request.text();
   }
 
-  const runtimeEnv = locals?.runtime?.env || import.meta.env || {};
-  let secretKey =
-    runtimeEnv.VINFAST_XHASH_SECRET ||
-    (typeof process !== "undefined"
-      ? process.env.VINFAST_XHASH_SECRET
-      : undefined);
-
-  if (!secretKey && import.meta.env.DEV) {
-    // Preserve local developer UX while still requiring env var in production.
-    secretKey = "Vinfast@2025";
-    console.warn("DEV fallback: using default VINFAST_XHASH_SECRET.");
-  }
-
-  if (!secretKey) {
-    console.error(
-      "CRITICAL: VINFAST_XHASH_SECRET environment variable is missing",
-    );
-    return new Response(
-      JSON.stringify({ error: "Server Configuration Error" }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      },
-    );
-  }
-
-  const timestamp = Date.now();
-  const xHash = generateXHash(
-    request.method,
-    apiPath,
-    vinHeader,
-    timestamp,
-    secretKey,
-  );
-  const xTimestamp = String(timestamp);
-  console.log(`[Proxy] Generated X-HASH for ${request.method} /${apiPath}`);
+  // Only telemetry endpoints require X-HASH and X-HASH-2 signing.
+  // Other endpoints (user-vehicle, vehicle-model) only need Bearer token.
+  const isTelemetryPath = apiPath.startsWith("ccaraccessmgmt/api/v1/telemetry/");
 
   const proxyHeaders = {
     ...API_HEADERS, // standard headers
     "Content-Type": "application/json",
     Authorization: `Bearer ${accessToken}`,
-    "X-HASH": xHash,
-    "X-TIMESTAMP": xTimestamp,
   };
+
+  if (isTelemetryPath) {
+    const runtimeEnv = locals?.runtime?.env || import.meta.env || {};
+    let secretKey =
+      runtimeEnv.VINFAST_XHASH_SECRET ||
+      (typeof process !== "undefined"
+        ? process.env.VINFAST_XHASH_SECRET
+        : undefined);
+
+    if (!secretKey && import.meta.env.DEV) {
+      secretKey = "Vinfast@2025";
+      console.warn("DEV fallback: using default VINFAST_XHASH_SECRET.");
+    }
+
+    if (!secretKey) {
+      console.error(
+        "CRITICAL: VINFAST_XHASH_SECRET environment variable is missing",
+      );
+      return new Response(
+        JSON.stringify({ error: "Server Configuration Error" }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    const timestamp = Date.now();
+    const xTimestamp = String(timestamp);
+
+    const xHash = generateXHash(
+      request.method,
+      apiPath,
+      vinHeader,
+      timestamp,
+      secretKey,
+    );
+
+    const xHash2 = generateXHash2({
+      platform: API_HEADERS["x-device-platform"] || "android",
+      vinCode: vinHeader || null,
+      identifier: API_HEADERS["x-device-identifier"] || "",
+      path: "/" + apiPath,
+      method: request.method,
+      timestamp: xTimestamp,
+    });
+
+    proxyHeaders["X-HASH"] = xHash;
+    proxyHeaders["X-HASH-2"] = xHash2;
+    proxyHeaders["X-TIMESTAMP"] = xTimestamp;
+    console.log(`[Proxy] Signed ${request.method} /${apiPath} with X-HASH + X-HASH-2`);
+  }
 
   if (vinHeader) proxyHeaders["x-vin-code"] = vinHeader;
   if (playerHeader) proxyHeaders["x-player-identifier"] = playerHeader;
@@ -143,18 +204,18 @@ export const ALL = async ({ request, params, cookies, locals }) => {
   }
 
   try {
+    console.log(`[Proxy] → ${request.method} ${targetUrl}`);
     const response = await fetch(targetUrl, init);
     const data = await response.text();
 
-    // Add debug header to indicate if hash was used
-    const responseHeaders = {
-      "Content-Type": "application/json",
-    };
-    responseHeaders["X-Hash-Source"] = "generated";
+    console.log(`[Proxy] ← ${response.status} (${data.length} bytes) for ${request.method} /${apiPath}`);
+    if (response.status >= 400) {
+      console.log(`[Proxy] Error body: ${data.substring(0, 500)}`);
+    }
 
     return new Response(data, {
       status: response.status,
-      headers: responseHeaders,
+      headers: { "Content-Type": "application/json" },
     });
   } catch (e) {
     console.error(`[Proxy Error] ${request.method} /${apiPath}:`, e);
