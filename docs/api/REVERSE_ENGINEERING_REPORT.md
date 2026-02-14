@@ -172,7 +172,251 @@ xhash = base64(hmac_sha256(secret, message))
 
 ---
 
-## Phần 2: API Endpoints Log
+## Phần 2: Reverse Engineering X-HASH-2 (Native Crypto)
+
+**Date:** February 14, 2026
+**Target:** VinFast Companion App v1.10.3 (Android), `libsecure.so` (ARM64)
+**Objective:** Reverse engineer X-HASH-2 - lớp signing thứ hai từ native code
+
+---
+
+### Phase 1: Phát hiện X-HASH-2
+
+Sau khi VinFast cập nhật server, telemetry API bắt đầu trả về `{"code":327681,"message":"Invalid request signature"}` dù X-HASH đúng. Phân tích APK cho thấy có thêm header `X-HASH-2` được tạo bởi `CryptoInterceptor` gọi native method `VFCrypto.signRequest()` trong `libsecure.so`.
+
+**OkHttp Interceptor chain:**
+```
+TokenInterceptor → HMACInterceptor (X-HASH) → CryptoInterceptor (X-HASH-2)
+```
+
+---
+
+### Phase 2: APK Decompilation (Android Split APK)
+
+**Công cụ:** apktool (decompile smali)
+
+**Bước thực hiện:**
+
+```bash
+# Pull APK từ device (split APKs)
+adb shell pm path com.vinfast.companion.app
+adb pull /data/app/~~xxx/base.apk       # 116M
+adb pull /data/app/~~xxx/split_config.arm64_v8a.apk  # 20M
+adb pull /data/app/~~xxx/split_config.xxhdpi.apk     # 8.5M
+
+# Decompile base APK
+apktool d base.apk -o decode/
+```
+
+**Files quan trọng tìm được:**
+
+1. `smali_classes15/com/vinfast/companion/cryptowrapper/CryptoInterceptor.smali` - Tạo X-HASH-2
+2. `smali_classes15/com/vinfast/companion/cryptowrapper/Message.smali` - 14-field data class
+3. `smali_classes13/com/lxquyen/secure/VFCrypto.smali` - JNI wrapper
+4. `lib/arm64-v8a/libsecure.so` - Native library (388K)
+
+**Phát hiện từ smali:**
+
+```java
+// CryptoInterceptor builds Message object with 14 fields:
+Message message = new Message(
+    xAppVersion, xImei, xDeviceFamily, xDeviceIdentifier,
+    xDeviceLocale, xDeviceOsVersion, xDevicePlatform,
+    xMethod, xPath, xServiceName, xTimestamp,
+    xTimezone, xUserAgent, xVinCode
+);
+
+// Convert to JSON and call native
+String json = new Gson().toJson(message);
+String hash2 = VFCrypto.signRequest(json); // JNI → libsecure.so
+request.header("X-HASH-2", hash2);
+```
+
+---
+
+### Phase 3: Native Library Decompilation (Ghidra)
+
+**Công cụ:** Ghidra 12 (headless mode)
+
+**Bước thực hiện:**
+
+```bash
+# Extract native library
+mkdir -p /tmp/vinfast_apk/extracted_libs
+cd decode && find . -name "libsecure.so" -exec cp {} /tmp/vinfast_apk/extracted_libs/ \;
+
+# Ghidra headless decompile (Java script, not Python)
+$GHIDRA_HOME/support/analyzeHeadless /tmp ghidra_project \
+    -import /tmp/vinfast_apk/extracted_libs/lib/arm64-v8a/libsecure.so \
+    -postScript DecompileAll.java \
+    -scriptPath /tmp/ghidra_scripts
+```
+
+**Output:** 51114 lines of decompiled C code
+
+**Key functions:**
+
+| Function | Address | Purpose |
+|----------|---------|---------|
+| `Java_com_lxquyen_secure_VFCrypto_signRequest` | 0x00128310 | JNI entry point |
+| `FUN_00127a64` | 0x00127a64 | Message string construction |
+| `FUN_00127914` | 0x00127914 | HMAC-SHA256 signing |
+| `FUN_0012758c` | 0x0012758c | Secret key construction (byte-by-byte) |
+| `FUN_0012826c` | 0x0012826c | tolower() (char OR 0x20) |
+| `FUN_001270b4` | 0x001270b4 | Anti-tamper: APK signature check |
+| `FUN_001271f4` | 0x001271f4 | Anti-tamper: Frida/Xposed detection |
+
+---
+
+### Phase 4: Message Format Analysis
+
+**Decompiled logic (`FUN_00127a64`):**
+
+```c
+// Parse JSON input
+cJSON_Parse(json);
+
+// Extract 6 fields
+platform   = cJSON_GetField("X-Device-Platform");
+vinCode    = cJSON_GetField("X-Vin-Code");       // nullable
+identifier = cJSON_GetField("X-Device-Identifier");
+timestamp  = cJSON_GetField("X-TIMESTAMP");
+method     = cJSON_GetField("X-METHOD");
+path       = cJSON_GetField("X-PATH");
+
+// Process path: strip leading "/", replace "/" with "_"
+if (path[0] == '/') erase(path, 0, 1);
+replace_all(path, '/', '_');
+
+// Concatenate: platform_[vinCode_]identifier_path_method_timestamp
+result = platform;
+append(result, "_");
+if (vinCode != NULL) { append(result, vinCode); append(result, "_"); }
+append(result, identifier);
+append(result, "_");
+append(result, path);
+append(result, "_");
+append(result, method);
+append(result, "_");
+append(result, timestamp);
+
+// Lowercase entire string
+transform(result, tolower);  // FUN_0012826c: char | 0x20
+```
+
+---
+
+### Phase 5: Secret Key Extraction
+
+**Vấn đề ban đầu:** Tưởng X-HASH-2 chỉ là Base64 encode của concatenated string (không có crypto). Nhưng server vẫn reject.
+
+**Phát hiện:** Hàm `signRequest` sau khi tạo message string, gọi `FUN_00127914` để **HMAC-SHA256 sign** trước khi trả về.
+
+**Secret key construction (`FUN_0012758c`):**
+
+```c
+// Key built byte-by-byte to avoid string search detection
+param[0]  = 0x43; // C
+param[1]  = 0x6f; // o
+param[2]  = 0x6e; // n
+param[3]  = 0x6e; // n
+param[4]  = 0x65; // e
+param[5]  = 0x63; // c
+param[6]  = 0x74; // t
+param[7]  = 0x65; // e
+param[8]  = 0x64; // d
+param[9]  = 0x43; // C
+param[10] = 0x61; // a
+param[11] = 0x72; // r
+param[12] = 0x40; // @
+param[13] = 0x36; // 6
+param[14] = 0x35; // 5
+param[15] = 0x32; // 2
+param[16] = 0x31; // 1
+// = "ConnectedCar@6521"
+```
+
+**Anti-detection measures trong libsecure.so:**
+- Key xây dựng từng byte, không phải string literal → grep/strings không tìm được
+- Có thêm `clock()` và `time()` checks giữa các byte (anti-debug timing)
+- APK signature verification (reject re-signed APKs)
+- Frida/Xposed/Substrate detection via `/proc/self/maps`
+- Package name check: `com.vinfast.companion.app` hoặc `.qa`
+
+---
+
+### Phase 6: Signing Algorithm
+
+**`FUN_00127914` flow:**
+
+```c
+// 1. Get message string and length
+data = GetByteArray(message);
+length = GetArrayLength(message);
+
+// 2. Build key (FUN_0012758c → "ConnectedCar@6521")
+key = buildKey();  // 17 bytes
+
+// 3. Init HMAC-SHA256
+ctx = HMAC_CTX_new();
+evpMd = EVP_sha256();
+HMAC_Init_ex(ctx, key, 17, evpMd, NULL);
+
+// 4. Update with message data
+HMAC_Update(ctx, data, length);
+
+// 5. Finalize → 32 bytes output
+HMAC_Final(ctx, output, &outputLen);
+HMAC_CTX_free(ctx);
+
+// 6. Return as byte array → Java side does Base64.encodeToString(result, Base64.NO_WRAP)
+```
+
+**Crypto library:** BoringSSL (Google's fork of OpenSSL, bundled in libsecure.so)
+
+---
+
+### Phase 7: Verification
+
+```javascript
+// Node.js verification
+const crypto = require('crypto');
+
+const message = "android_rllv2cwa5ph705671_vfdashboard-community-edition_" +
+                "ccaraccessmgmt_api_v1_telemetry_app_ping_post_1771033156922";
+const key = "ConnectedCar@6521";
+
+const hmac = crypto.createHmac('sha256', key);
+hmac.update(message);
+const hash2 = hmac.digest('base64');
+// Result matches server-accepted value ✓
+
+// Server response: 200 OK (7835 bytes telemetry data)
+```
+
+---
+
+### Tổng kết X-HASH-2
+
+| Phase | Công cụ | Mục đích | Kết quả |
+|-------|---------|----------|---------|
+| 1 | apktool + smali | Tìm interceptor chain | CryptoInterceptor → VFCrypto.signRequest() |
+| 2 | Ghidra (headless) | Decompile ARM64 .so | 51K lines C, tìm message format |
+| 3 | Ghidra analysis | Extract secret key | `ConnectedCar@6521` (byte-by-byte) |
+| 4 | Node.js | Verify | Match 100%, server trả 200 OK |
+
+**Key insights:**
+
+1. X-HASH-2 dùng **HMAC-SHA256** (không phải chỉ Base64 encode)
+2. Secret key `ConnectedCar@6521` được build từng byte trong native code để tránh detection
+3. Message format khác X-HASH: `platform_[vin_]identifier_path_method_timestamp`
+4. Path processing: strip `/` đầu, replace `/` → `_`
+5. Chỉ 6 fields (không phải 14) thực sự tham gia vào hash
+6. Headers phải dùng `x-device-platform: android` (server validate)
+
+---
+
+## Phần 3: API Endpoints Log
 
 ### Authentication
 

@@ -1,7 +1,7 @@
 # VinFast X-HASH Technical Documentation
 
-**Version:** 4.0
-**Updated:** January 24, 2026
+**Version:** 5.0
+**Updated:** February 14, 2026
 **Status:** Resolved
 
 ---
@@ -200,4 +200,134 @@ POST /api/v3.2/connected_car/app/ping
 
 ---
 
-**Note:** Secret key được giữ private trong source code. Dashboard tự động generate X-HASH cho mọi API request.
+---
+
+## X-HASH-2 Specification (Added Feb 2026)
+
+### Overview
+
+X-HASH-2 là lớp signing thứ hai, được implement trong native code (`libsecure.so`). Server bắt đầu yêu cầu header này từ khoảng tháng 2/2026 cho telemetry endpoints.
+
+### Required Headers (Updated)
+
+| Header | Description | Example |
+|--------|-------------|---------|
+| `X-HASH` | HMAC-SHA256 signature (Base64) | `u5B0xgcHtqNpGNST5Sw53ds5PvMhb/ApCUgZQ1glAh0=` |
+| `X-HASH-2` | Native HMAC-SHA256 signature (Base64) | `j6M6tf1Tpr+jldxYN5QHNIKXFe5X3vD6yrr+rTbAcVI=` |
+| `X-TIMESTAMP` | Unix timestamp (milliseconds) | `1771033156922` |
+| `X-VIN-CODE` | Vehicle Identification Number | `RLLVXXXXXXXXXXXXX71` |
+| `Authorization` | Bearer token from Auth0 login | `Bearer eyJhbG...` |
+| `x-device-platform` | **Must be `android`** (see notes) | `android` |
+
+### Algorithm
+
+```
+// Step 1: Build path
+normalizedPath = path.stripLeadingSlash().replace("/", "_")
+
+// Step 2: Build message
+parts = [platform]
+if (vinCode) parts.push(vinCode)
+parts.push(identifier, normalizedPath, method, timestamp)
+message = parts.join("_").toLowerCase()
+
+// Step 3: Sign
+X-HASH-2 = Base64(HMAC-SHA256("ConnectedCar@6521", message))
+```
+
+**Components:**
+
+- `platform`: Value of `x-device-platform` header (must be `android`)
+- `vinCode`: Vehicle VIN code (optional, included when x-vin-code header present)
+- `identifier`: Value of `x-device-identifier` header
+- `normalizedPath`: API path with leading `/` stripped and `/` replaced by `_`
+- `method`: HTTP method (GET, POST, etc.)
+- `timestamp`: X-TIMESTAMP value (milliseconds)
+
+**Example:**
+
+```
+Input:
+  platform = "android"
+  vinCode = "RLLVXXXXXXXXXXXXX71"
+  identifier = "vfdashboard-community-edition"
+  path = "/ccaraccessmgmt/api/v1/telemetry/app/ping"
+  method = "POST"
+  timestamp = "1771033156922"
+
+Normalized path:
+  "ccaraccessmgmt_api_v1_telemetry_app_ping"
+
+Message (lowercase):
+  "android_rllvxxxxxxxxxxxxx71_vfdashboard-community-edition_ccaraccessmgmt_api_v1_telemetry_app_ping_post_1771033156922"
+
+Output:
+  X-HASH-2 = "j6M6tf1Tpr+jldxYN5QHNIKXFe5X3vD6yrr+rTbAcVI="
+```
+
+### Implementation (JavaScript)
+
+```javascript
+import crypto from "crypto";
+
+function generateXHash2({ platform, vinCode, identifier, path, method, timestamp }) {
+  let normalizedPath = path;
+  if (normalizedPath.startsWith("/")) {
+    normalizedPath = normalizedPath.substring(1);
+  }
+  normalizedPath = normalizedPath.replace(/\//g, "_");
+
+  const parts = [platform];
+  if (vinCode) parts.push(vinCode);
+  parts.push(identifier, normalizedPath, method, String(timestamp));
+
+  const message = parts.join("_").toLowerCase();
+
+  const hmac = crypto.createHmac("sha256", "ConnectedCar@6521");
+  hmac.update(message);
+  return hmac.digest("base64");
+}
+```
+
+### Key Differences: X-HASH vs X-HASH-2
+
+| Aspect | X-HASH | X-HASH-2 |
+|--------|--------|----------|
+| Secret Key | `Vinfast@2025` (AES-encrypted in APK) | `ConnectedCar@6521` (byte-by-byte in native .so) |
+| Message format | `method_path_[vin_]secret_timestamp` | `platform_[vin_]identifier_path_method_timestamp` |
+| Path format | With leading `/` | Without leading `/`, `/` replaced by `_` |
+| Secret in message | Yes (included in message) | No (only used as HMAC key) |
+| Source | Java (HMACInterceptor) | Native C (libsecure.so via JNI) |
+| Required for | Telemetry endpoints only | Telemetry endpoints only |
+
+### Important Notes
+
+1. **`x-device-platform` phải là `android`** — Server reject `ios` và các giá trị tùy chỉnh khác cho **tất cả** API endpoints (không chỉ telemetry). Dùng `ios` sẽ bị 401 ngay cả ở `user-vehicle` endpoint, dẫn đến redirect loop về trang login.
+2. **Tại sao chỉ hỗ trợ Android?** — Việc dịch ngược APK (Android) nhanh và dễ hơn nhiều so với iOS (IPA cần jailbreak, khó extract native frameworks). Các secret key và algorithm trong tài liệu này đều được trích xuất từ Android APK (`libsecure.so`, `HMACInterceptor.smali`). iOS có thể dùng secret key và signing flow khác — chưa được nghiên cứu kỹ.
+3. **`x-device-family` và `x-device-os-version` không bị validate** — Có thể đặt giá trị tùy chỉnh (VFDashboard hiện dùng `VFDashboard` / `Community`).
+4. X-HASH-2 secret key (`ConnectedCar@6521`) được build byte-by-byte trong native code để tránh string search.
+5. The native library cũng thực hiện anti-tamper checks (APK signature, Frida detection).
+6. Cả X-HASH và X-HASH-2 phải dùng **cùng** giá trị timestamp.
+
+---
+
+## VFDashboard Current Configuration
+
+Các header mà VFDashboard đang sử dụng (đã verified hoạt động):
+
+| Header | Value | Validated by Server? |
+|--------|-------|:---:|
+| `x-device-platform` | `android` | **Yes** — bắt buộc `android` |
+| `x-device-family` | `VFDashboard` | No — tùy chỉnh OK |
+| `x-device-os-version` | `Community` | No — tùy chỉnh OK |
+| `x-device-identifier` | `vfdashboard-community-edition` | No* |
+| `x-service-name` | `CAPP` | Unknown |
+| `x-app-version` | `1.10.3` | Unknown |
+| `x-device-locale` | `vi-VN` | No |
+| `x-timezone` | `Asia/Ho_Chi_Minh` | No |
+
+> *`x-device-identifier` được dùng trong X-HASH-2 message, nhưng server chấp nhận giá trị tùy chỉnh.
+
+---
+
+**Note:** Secret keys được giữ private trong source code. Dashboard tự động generate cả X-HASH và X-HASH-2 cho mọi API request.
