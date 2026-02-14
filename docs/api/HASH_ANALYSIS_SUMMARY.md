@@ -200,8 +200,6 @@ POST /api/v3.2/connected_car/app/ping
 
 ---
 
----
-
 ## X-HASH-2 Specification (Added Feb 2026)
 
 ### Overview

@@ -382,7 +382,7 @@ HMAC_CTX_free(ctx);
 // Node.js verification
 const crypto = require('crypto');
 
-const message = "android_rllv2cwa5ph705671_vfdashboard-community-edition_" +
+const message = "android_rllvxxxxxxxxxxxxx71_vfdashboard-community-edition_" +
                 "ccaraccessmgmt_api_v1_telemetry_app_ping_post_1771033156922";
 const key = "ConnectedCar@6521";
 
@@ -743,7 +743,7 @@ Notes:
 
 ---
 
-## Phần 3: Khả Năng Khai Thác Thêm
+## Phần 4: Khả Năng Khai Thác Thêm
 
 ### Đã xác nhận có thể lấy:
 
