@@ -182,10 +182,15 @@ function applyFilter(
 }
 
 /**
- * Compute a smart default filter based on first-batch data.
- * - If data has current-month sessions → filter by current month
- * - Else if data has current-year sessions → filter by current year
- * - Otherwise → "all"
+ * Compute a smart default filter based on data characteristics.
+ *
+ * Decision tree (evaluated on first-batch data):
+ *   1. ≤100 total entries → "all" (small dataset, show everything)
+ *   2. Data spans >1 calendar year → "year" (pick current year, or latest year if no current-year data)
+ *   3. Data is within a single year → "month" (pick current month, or latest month with data)
+ *
+ * This gives a sensible zoom level: few records = show all, many records spanning
+ * years = yearly view, recent-only data = monthly view for quick scanning.
  */
 function computeSmartDefault(sessions: ChargingSession[]): {
   mode: FilterMode;
@@ -194,29 +199,51 @@ function computeSmartDefault(sessions: ChargingSession[]): {
 } {
   if (sessions.length === 0) return { mode: "all", year: 0, month: 0 };
 
+  // --- Rule 1: Small dataset → show all ---
+  if (sessions.length <= 100) {
+    return { mode: "all", year: 0, month: 0 };
+  }
+
+  // Gather distinct years present in data
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1;
-
-  const hasCurrentMonth = sessions.some((s) => {
+  const yearSet = new Set<number>();
+  for (const s of sessions) {
     const t = getSessionTime(s);
-    if (!t) return false;
-    const d = new Date(t);
-    return d.getFullYear() === currentYear && d.getMonth() + 1 === currentMonth;
-  });
-  if (hasCurrentMonth) {
-    return { mode: "month", year: currentYear, month: currentMonth };
+    if (t) yearSet.add(new Date(t).getFullYear());
+  }
+  const distinctYears = Array.from(yearSet).sort((a, b) => b - a); // newest first
+
+  // --- Rule 2: Data spans more than 1 calendar year → year mode ---
+  if (distinctYears.length > 1) {
+    // Prefer current year if data exists; otherwise pick latest year
+    const targetYear = distinctYears.includes(currentYear)
+      ? currentYear
+      : distinctYears[0];
+    return { mode: "year", year: targetYear, month: 0 };
   }
 
-  // Check if we have sessions in the current year
-  const hasCurrentYear = sessions.some((s) => {
+  // --- Rule 3: All data within a single year → month mode ---
+  const singleYear = distinctYears[0] || currentYear;
+
+  // Find months with data within that year
+  const monthSet = new Set<number>();
+  for (const s of sessions) {
     const t = getSessionTime(s);
-    return t && new Date(t).getFullYear() === currentYear;
-  });
+    if (!t) continue;
+    const d = new Date(t);
+    if (d.getFullYear() === singleYear) monthSet.add(d.getMonth() + 1);
+  }
+  const sortedMonths = Array.from(monthSet).sort((a, b) => b - a); // newest first
 
-  if (!hasCurrentYear) return { mode: "all", year: 0, month: 0 };
+  // Prefer current month if available, otherwise latest month with data
+  const targetMonth =
+    singleYear === currentYear && sortedMonths.includes(currentMonth)
+      ? currentMonth
+      : sortedMonths[0] || currentMonth;
 
-  return { mode: "year", year: currentYear, month: 0 };
+  return { mode: "month", year: singleYear, month: targetMonth };
 }
 
 /**

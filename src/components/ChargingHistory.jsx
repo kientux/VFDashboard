@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "@nanostores/react";
 import { vehicleStore } from "../stores/vehicleStore";
 import {
@@ -375,10 +375,14 @@ function AnimatedStat({ label, value, colorClass, bgClass }) {
   );
 }
 
+// Batch size for infinite scroll — render this many more when sentinel enters viewport
+const SCROLL_BATCH = 60;
+
 export default function ChargingHistory({ inline = false }) {
   const store = useStore(chargingHistoryStore);
   const { vin } = useStore(vehicleStore);
-  const [visibleCount, setVisibleCount] = useState(60);
+  const [visibleCount, setVisibleCount] = useState(SCROLL_BATCH);
+  const sentinelRef = useRef(null);
 
   // Fetch whenever VIN changes (including mount)
   // VIN is passed explicitly so the store doesn't depend on api.vin timing
@@ -388,11 +392,35 @@ export default function ChargingHistory({ inline = false }) {
     }
   }, [vin]);
 
+  // Reset visible window when filter/VIN changes
   useEffect(() => {
-    setVisibleCount(60);
+    setVisibleCount(SCROLL_BATCH);
   }, [vin, store.filterMode, store.selectedYear, store.selectedMonth]);
 
   const safeSessions = Array.isArray(store.sessions) ? store.sessions : [];
+
+  // --- Infinite scroll via IntersectionObserver ---
+  const loadMore = useCallback(() => {
+    setVisibleCount((v) => {
+      const next = v + SCROLL_BATCH;
+      return next >= safeSessions.length ? safeSessions.length : next;
+    });
+  }, [safeSessions.length]);
+
+  useEffect(() => {
+    if (inline) return; // inline mode renders everything, no scroll paging
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) loadMore();
+      },
+      { rootMargin: "300px" }, // trigger 300px before sentinel is visible
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [inline, loadMore]);
 
   const maxEnergy = useMemo(
     () =>
@@ -559,15 +587,17 @@ export default function ChargingHistory({ inline = false }) {
             index={index}
           />
         ))}
+        {/* Infinite scroll sentinel — observed by IntersectionObserver */}
         {hasMoreToRender && (
-          <div className="pt-1 pb-2 flex justify-center">
-            <button
-              type="button"
-              onClick={() => setVisibleCount((v) => v + 80)}
-              className="text-xs font-bold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 rounded-md px-3 py-1.5 transition-colors"
-            >
-              Show more sessions ({safeSessions.length - renderedSessions.length} left)
-            </button>
+          <div
+            ref={sentinelRef}
+            className="flex items-center justify-center py-4"
+            aria-hidden="true"
+          >
+            <div className="w-5 h-5 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin" />
+            <span className="ml-2 text-xs text-gray-400">
+              {safeSessions.length - renderedSessions.length} more
+            </span>
           </div>
         )}
 
