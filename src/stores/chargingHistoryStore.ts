@@ -304,7 +304,11 @@ function hydrateCacheFromStorage() {
     const rawItems = parsed.items as Record<string, VinCache>;
     Object.entries(rawItems).forEach(([vin, item]) => {
       if (!item || !Array.isArray(item.sessions)) return;
-      if (!Number.isFinite(item.fetchedAt) || !Number.isFinite(item.totalRecords)) return;
+      if (
+        !Number.isFinite(item.fetchedAt) ||
+        !Number.isFinite(item.totalRecords)
+      )
+        return;
       if (now - item.fetchedAt > CACHE_TTL) return;
 
       vinCacheMap.set(vin, item);
@@ -359,7 +363,11 @@ function cleanupPersistedCache(target: Record<string, VinCache>) {
   }
 }
 
-function setCachedData(vin: string, sessions: ChargingSession[], totalRecords: number) {
+function setCachedData(
+  vin: string,
+  sessions: ChargingSession[],
+  totalRecords: number,
+) {
   const payload: VinCache = {
     sessions,
     totalRecords,
@@ -443,10 +451,7 @@ export function setFilterMonth(year: number, month: number) {
  * - First page (100 records) is used for immediate default filter decision + quick render
  * - Remaining pages preload in background to complete statistics
  */
-export async function fetchChargingSessions(
-  vinCode?: string,
-  force = false,
-) {
+export async function fetchChargingSessions(vinCode?: string, force = false) {
   // Explicit VIN takes priority, fallback to api.vin
   const vin = vinCode || api.vin;
   if (!vin) return;
@@ -461,11 +466,7 @@ export async function fetchChargingSessions(
 
   // Check per-VIN cache
   const cached = hydrateOrGetCached(vin);
-  if (
-    !force &&
-    cached &&
-    Date.now() - cached.fetchedAt < CACHE_TTL
-  ) {
+  if (!force && cached && Date.now() - cached.fetchedAt < CACHE_TTL) {
     chargingHistoryStore.setKey("loadedVin", vin);
     chargingHistoryStore.setKey("totalRecords", cached.totalRecords);
     chargingHistoryStore.setKey("error", null);
@@ -546,7 +547,10 @@ export async function fetchChargingSessions(
         chargingHistoryStore.setKey("isLoadingMore", true);
 
         let failedPages = 0;
-        const remaining = Array.from({ length: totalPages - 1 }, (_, i) => i + 1);
+        const remaining = Array.from(
+          { length: totalPages - 1 },
+          (_, i) => i + 1,
+        );
         const concurrency = 4;
         for (let i = 0; i < remaining.length; i += concurrency) {
           const batch = remaining.slice(i, i + concurrency);

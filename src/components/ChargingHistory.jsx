@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useStore } from "@nanostores/react";
 import { vehicleStore } from "../stores/vehicleStore";
 import {
@@ -145,7 +151,11 @@ function SessionCard({ session, maxEnergy, index }) {
       className={`bg-white rounded-2xl border p-4 shadow-sm hover:shadow-md transition-all duration-300 ${
         index < 24 ? "animate-in fade-in slide-in-from-bottom-2" : ""
       } ${hasIdleFee ? "border-orange-200" : "border-gray-100"}`}
-      style={index < 24 ? { animationDelay: `${Math.min(index * 30, 300)}ms` } : undefined}
+      style={
+        index < 24
+          ? { animationDelay: `${Math.min(index * 30, 300)}ms` }
+          : undefined
+      }
     >
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="min-w-0 flex-1">
@@ -476,7 +486,8 @@ export default function ChargingHistory({ inline = false }) {
   const renderedSessions = inline
     ? safeSessions
     : safeSessions.slice(0, Math.min(visibleCount, safeSessions.length));
-  const hasMoreToRender = !inline && renderedSessions.length < safeSessions.length;
+  const hasMoreToRender =
+    !inline && renderedSessions.length < safeSessions.length;
 
   return (
     <div className={inline ? "flex flex-col" : "flex flex-col h-full min-h-0"}>

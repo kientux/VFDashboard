@@ -7,9 +7,7 @@ import {
   vehicleStore,
 } from "../stores/vehicleStore";
 import { fetchChargingSessions } from "../stores/chargingHistoryStore";
-import {
-  REFRESH_INTERVAL,
-} from "../stores/refreshTimerStore";
+import { REFRESH_INTERVAL } from "../stores/refreshTimerStore";
 
 export default function DashboardController({ vin: initialVin }) {
   const isMounted = useRef(true);

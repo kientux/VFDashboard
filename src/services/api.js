@@ -145,7 +145,8 @@ class VinFastAPI {
   restoreSession() {
     if (typeof window === "undefined") return;
     try {
-      const data = this.getCookie(SESSION_KEY) || this._readSessionFromStorage();
+      const data =
+        this.getCookie(SESSION_KEY) || this._readSessionFromStorage();
       if (data) {
         this.vin = data.vin;
         this.userId = data.userId;
