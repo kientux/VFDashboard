@@ -1,4 +1,3 @@
-import React from "react";
 import { TIRE_PRESSURE, TEMPERATURE } from "../constants/vehicle";
 
 // Tire Pressure Card - Polished Visuals with Full Labels

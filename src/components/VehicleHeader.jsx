@@ -2,8 +2,6 @@ import React from "react";
 import { useStore } from "@nanostores/react";
 import {
   vehicleStore,
-  fetchTelemetry,
-  fetchFullTelemetry,
   switchVehicle,
   refreshVehicle,
 } from "../stores/vehicleStore";
@@ -213,17 +211,17 @@ export default function VehicleHeader({ onOpenTelemetry, onOpenCharging }) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-col min-w-0">
             {!vehicle.vin ? (
-              <div className="h-6 w-48 bg-gray-200 animate-pulse rounded"></div>
+              <div className="h-6 w-48 bg-gray-100 animate-shimmer rounded"></div>
             ) : (
-              <h1 className="text-base md:text-2xl font-extrabold text-gray-900 tracking-tight leading-none truncate">
+              <h1 className="text-base md:text-2xl font-extrabold text-gray-900 tracking-tight leading-none truncate animate-blur-in">
                 {vehicle.manufacturer} {vehicle.marketingName}
               </h1>
             )}
 
             {!vehicle.vin ? (
-              <div className="h-3 w-32 bg-gray-200 animate-pulse rounded mt-2"></div>
+              <div className="h-3 w-32 bg-gray-100 animate-shimmer rounded mt-2"></div>
             ) : (
-              <div className="mt-1.5 flex items-center">
+              <div className="mt-1.5 flex items-center animate-blur-in">
                 <span
                   className="text-[9px] md:text-xs text-gray-500 font-bold bg-gray-100 px-2 py-0.5 rounded text-transform uppercase shrink-0"
                   title={vehicle.vin}
@@ -238,7 +236,7 @@ export default function VehicleHeader({ onOpenTelemetry, onOpenCharging }) {
 
       {/* Right: Actions & Context */}
       <div className="flex items-center gap-1.5 md:gap-3 shrink-0">
-        <div className="hidden md:flex">
+        <div className="hidden md:flex animate-blur-in">
           <WeatherIcon
             temp={vehicle.weather_outside_temp}
             code={vehicle.weather_code}
@@ -250,12 +248,12 @@ export default function VehicleHeader({ onOpenTelemetry, onOpenCharging }) {
           onClick={handleRefresh}
           disabled={vehicle.isRefreshing}
           title="Refresh Data"
-          className="flex items-center gap-2 bg-white px-2 pr-3 h-9 rounded-full border border-gray-200 shadow-sm ml-1 hover:border-indigo-200 hover:text-indigo-600 transition-all active:scale-95 text-gray-500 cursor-pointer"
+          className="flex items-center gap-2 bg-white px-2 pr-3 h-9 rounded-full border border-gray-200 shadow-sm ml-1 hover:border-indigo-200 hover:text-indigo-600 transition-all-custom tap-active text-gray-500 cursor-pointer"
         >
           {/* Refresh Icon */}
           <div className="p-1.5 rounded-full">
             <svg
-              className={`w-4 h-4 ${vehicle.isRefreshing ? "animate-spin" : ""}`}
+              className={`w-4 h-4 ${vehicle.isRefreshing ? "animate-spin text-indigo-600" : ""}`}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -263,7 +261,7 @@ export default function VehicleHeader({ onOpenTelemetry, onOpenCharging }) {
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                strokeWidth="2"
+                strokeWidth="2.5"
                 d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
               ></path>
             </svg>
@@ -297,7 +295,7 @@ export default function VehicleHeader({ onOpenTelemetry, onOpenCharging }) {
           <button
             onClick={() => setToolsOpen(!toolsOpen)}
             title="Tools"
-            className="flex items-center gap-2 px-3 h-9 bg-white text-gray-600 hover:text-indigo-600 hover:border-indigo-200 border border-gray-200 rounded-full transition-all shadow-sm active:scale-95 cursor-pointer"
+            className="flex items-center gap-2 px-3 h-9 bg-white text-gray-600 hover:text-indigo-600 hover:border-indigo-200 border border-gray-200 rounded-full transition-all-custom shadow-sm tap-active cursor-pointer"
           >
             <svg
               className="w-4 h-4"

@@ -1,11 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useStore } from "@nanostores/react";
 import { vehicleStore, fetchFullTelemetry } from "../stores/vehicleStore";
-import {
-  DEEP_SCAN_GROUPS,
-  getSortedGroups,
-  getGroupByAlias,
-} from "../config/deepScanGroups";
+import { getSortedGroups, getGroupByAlias } from "../config/deepScanGroups";
 
 // Icon component for groups
 const GroupIcon = ({ icon }) => {
@@ -323,8 +319,7 @@ const formatValue = (value, fieldConfig) => {
   if (value === null || value === undefined) return "N/A";
 
   if (fieldConfig) {
-    const { format, enumMap, trueLabel, falseLabel, decimals, unit } =
-      fieldConfig;
+    const { format, enumMap, trueLabel, falseLabel, decimals } = fieldConfig;
 
     if (format === "boolean") {
       const boolVal =

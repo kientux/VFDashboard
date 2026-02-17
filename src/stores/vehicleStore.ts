@@ -18,6 +18,7 @@ export interface VehicleInfo {
   profileImage?: string;
   warrantyExpirationDate?: string | null;
   warrantyMileage?: number | null;
+  batteryCapacity?: number | null; // kWh
   vehicleAliasVersion?: string;
 }
 
@@ -125,6 +126,8 @@ export interface VehicleState {
   remaining_charging_time?: number | null;
   battery_health_12v?: string | null; // OK/Low
   soh_percentage?: number | null;
+  battery_capacity_kwh?: number | null; // From user-vehicle API
+  battery_nominal_capacity_kwh?: number | null; // From telemetry alias
   battery_type?: string;
   battery_serial?: string | null;
   battery_manufacture_date?: string | null;
@@ -198,6 +201,8 @@ export const vehicleStore = map<VehicleState>({
   remaining_charging_time: null,
   soh_percentage: null,
   battery_health_12v: null,
+  battery_capacity_kwh: null,
+  battery_nominal_capacity_kwh: null,
   battery_type: "--",
   battery_serial: null,
   battery_manufacture_date: null,
@@ -329,6 +334,7 @@ const INITIAL_TELEMETRY: Partial<VehicleState> = {
   remaining_charging_time: null,
   soh_percentage: null,
   battery_health_12v: null,
+  battery_nominal_capacity_kwh: null,
   battery_type: "--",
   battery_serial: null,
   battery_manufacture_date: null,
@@ -361,10 +367,28 @@ const INITIAL_TELEMETRY: Partial<VehicleState> = {
   service_appointment_status: null,
 };
 
+const parseBatteryCapacityKwh = (vehicleInfo: any): number | null => {
+  const rawBatteryCapacity =
+    vehicleInfo?.batteryCapacity ??
+    vehicleInfo?.battery_capacity ??
+    vehicleInfo?.batteryCapacityKwh ??
+    vehicleInfo?.batteryCapacityKWH;
+  const batteryCapacity =
+    rawBatteryCapacity !== null &&
+    rawBatteryCapacity !== undefined &&
+    rawBatteryCapacity !== ""
+      ? Number(rawBatteryCapacity)
+      : null;
+
+  return Number.isFinite(batteryCapacity) ? batteryCapacity : null;
+};
+
 const getVehicleBaseState = (
   vehicleInfo: any,
   current: VehicleState,
 ): Partial<VehicleState> => {
+  const batteryCapacity = parseBatteryCapacityKwh(vehicleInfo);
+
   return {
     vin: vehicleInfo.vinCode,
     marketingName: vehicleInfo.marketingName,
@@ -382,6 +406,7 @@ const getVehicleBaseState = (
     // Warranty
     warrantyExpirationDate: vehicleInfo.warrantyExpirationDate,
     warrantyMileage: vehicleInfo.warrantyMileage,
+    battery_capacity_kwh: batteryCapacity,
   };
 };
 
@@ -447,7 +472,7 @@ export const refreshVehicle = async (vin: string) => {
   await fetchTelemetry(vin);
 };
 
-export const fetchTelemetry = async (vin: string) => {
+export const fetchTelemetry = async (vin: string, isBackground = false) => {
   if (!vin) return;
 
   let success = false;
@@ -458,8 +483,8 @@ export const fetchTelemetry = async (vin: string) => {
   const fetchTask = (async () => {
     telemetryInFlightCount += 1;
 
-    if (telemetryInFlightCount === 1) {
-      // Set refreshing state only for first concurrent call.
+    if (telemetryInFlightCount === 1 && !isBackground) {
+      // Set refreshing state only for first concurrent call and if not background.
       vehicleStore.setKey("isRefreshing", true);
       vehicleStore.setKey("isEnriching", true);
       setRefreshing(true);
@@ -476,16 +501,16 @@ export const fetchTelemetry = async (vin: string) => {
     } finally {
       telemetryInFlightCount = Math.max(0, telemetryInFlightCount - 1);
 
-      if (telemetryInFlightCount === 0) {
+      if (telemetryInFlightCount === 0 || !isBackground) {
         vehicleStore.setKey("isRefreshing", false);
         vehicleStore.setKey("isEnriching", false);
         setRefreshing(false);
+      }
 
-        if (success) {
-          resetRefreshTimer(); // Reset the countdown timer only after successful refresh
-          if (!vehicleStore.get().isInitialized) {
-            vehicleStore.setKey("isInitialized", true);
-          }
+      if (success) {
+        if (!isBackground) resetRefreshTimer(); // Reset timer only for active vehicle
+        if (!vehicleStore.get().isInitialized) {
+          vehicleStore.setKey("isInitialized", true);
         }
       }
     }
@@ -497,6 +522,19 @@ export const fetchTelemetry = async (vin: string) => {
   } finally {
     if (telemetryFetchInFlight.get(vin) === fetchTask) {
       telemetryFetchInFlight.delete(vin);
+    }
+  }
+};
+
+export const prefetchOtherVehicles = async () => {
+  const current = vehicleStore.get();
+  const activeVin = current.vin;
+  const otherVehicles = current.vehicles.filter((v) => v.vinCode !== activeVin);
+
+  for (const v of otherVehicles) {
+    if (!current.vehicleCache[v.vinCode]?.lastUpdated) {
+      console.log(`Prefetching telemetry for background vehicle: ${v.vinCode}`);
+      fetchTelemetry(v.vinCode, true);
     }
   }
 };
@@ -647,13 +685,17 @@ export const fetchVehicles = async (): Promise<string | null> => {
       const uniqueVehicles = Array.from(
         new Map(vehicles.map((v: any) => [v.vinCode, v])).values(),
       );
+      const normalizedVehicles = uniqueVehicles.map((v: any) => ({
+        ...v,
+        batteryCapacity: parseBatteryCapacityKwh(v),
+      }));
 
       // Store all vehicles
-      vehicleStore.setKey("vehicles", uniqueVehicles);
+      vehicleStore.setKey("vehicles", normalizedVehicles);
 
       // Populate Cache with Initial Info for all vehicles
       const cache: Record<string, Partial<VehicleState>> = {};
-      uniqueVehicles.forEach((v: any) => {
+      normalizedVehicles.forEach((v: any) => {
         cache[v.vinCode] = {
           vin: v.vinCode,
           marketingName: v.marketingName,
@@ -666,6 +708,7 @@ export const fetchVehicles = async (): Promise<string | null> => {
           vehicleImage: v.vehicleImage,
           warrantyExpirationDate: v.warrantyExpirationDate,
           warrantyMileage: v.warrantyMileage,
+          battery_capacity_kwh: v.batteryCapacity ?? null,
         };
       });
       vehicleStore.setKey("vehicleCache", cache);
@@ -673,6 +716,9 @@ export const fetchVehicles = async (): Promise<string | null> => {
       // Automatically switch to the first vehicle
       const firstVin = vehicles[0].vinCode;
       await switchVehicle(firstVin);
+
+      // Prefetch other vehicles in background
+      prefetchOtherVehicles();
 
       return firstVin;
     }

@@ -3,6 +3,8 @@ export const TELEMETRY_KEY_MAP = {
   VEHICLE_STATUS_HV_BATTERY_SOC: "battery_level",
   VEHICLE_STATUS_REMAINING_DISTANCE: "range",
   BMS_STATUS_STATE_OF_HEALTH: "soh_percentage",
+  BMS_STATUS_NOMINAL_CAPACITY_OF_THE_BATTERY_PACK:
+    "battery_nominal_capacity_kwh",
   CHARGING_STATUS_CHARGING_REMAINING_TIME: "remaining_charging_time",
   CHARGE_CONTROL_CURRENT_TARGET_SOC: "target_soc",
   CHARGING_STATUS_CHARGING_STATUS: "charging_status", // 0=Plug in, 1=Charging...
@@ -171,7 +173,7 @@ export const parseTelemetry = (rawData, pathToAlias) => {
             result.service_appointment_status = parsed[0].status;
           }
         }
-      } catch (e) {
+      } catch {
         // Not JSON, keep original value
       }
     }

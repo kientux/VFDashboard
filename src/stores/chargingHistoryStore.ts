@@ -443,22 +443,21 @@ export function setFilterMonth(year: number, month: number) {
 
 /**
  * Fetch ALL charging sessions for a specific VIN.
- * @param vinCode — explicit VIN to fetch for (from vehicleStore, not api.vin)
+ * @param vinCode — explicit VIN to fetch for (required; do not rely on api.vin)
  * @param force — bypass cache
  *
  * - Per-VIN in-memory cache with 24h TTL
  * - Fetches page 0 first (size=100), then remaining pages in parallel
- * - First page (100 records) is used for immediate default filter decision + quick render
- * - Remaining pages preload in background to complete statistics
+ * - Applies filter after collecting all pages to keep UI update atomic
  */
 export async function fetchChargingSessions(vinCode?: string, force = false) {
-  // Explicit VIN takes priority, fallback to api.vin
-  const vin = vinCode || api.vin;
-  if (!vin) return;
-
-  // Ensure api.vin is set so x-vin-code header is correct for this fetch
-  const prevApiVin = api.vin;
-  api.vin = vin;
+  const vin = vinCode?.trim();
+  if (!vin) {
+    console.warn(
+      "fetchChargingSessions called without vinCode; skip to avoid cross-VIN race",
+    );
+    return;
+  }
 
   // Check if VIN changed from what the store currently shows
   const currentLoadedVin = chargingHistoryStore.get().loadedVin;
@@ -487,20 +486,17 @@ export async function fetchChargingSessions(vinCode?: string, force = false) {
         st.selectedMonth,
       );
     }
-    // Restore api.vin if it was different (other code may depend on it)
-    api.vin = prevApiVin;
     return;
   }
 
   const runningFetch = chargingHistoryFetchInFlight.get(vin);
   if (runningFetch) {
     await runningFetch;
-    api.vin = prevApiVin;
     return;
   }
 
-  // Clear previous data when switching VINs for clean transition
-  if (vinChanged) {
+  // Clear previous data when switching VINs OR forcing refresh for clean transition
+  if (vinChanged || force) {
     chargingHistoryStore.setKey("sessions", []);
     chargingHistoryStore.setKey("totalLoaded", 0);
     chargingHistoryStore.setKey("totalRecords", 0);
@@ -518,31 +514,16 @@ export async function fetchChargingSessions(vinCode?: string, force = false) {
     try {
       const PAGE_SIZE = 100;
 
-      const firstJson = await api.getChargingHistory(0, PAGE_SIZE);
+      const firstJson = await api.getChargingHistory(0, PAGE_SIZE, vin);
       const firstSessions: ChargingSession[] = extractSessions(firstJson);
       const totalRecords = extractTotalRecords(firstJson, firstSessions.length);
 
       let allSessions: ChargingSession[] = [...firstSessions];
       chargingHistoryStore.setKey("totalRecords", totalRecords);
 
-      const firstUniqueSessions = normalizeIdSet(firstSessions);
-      if (vinChanged) {
-        const smart = computeSmartDefault(firstUniqueSessions);
-        applyFilter(firstUniqueSessions, smart.mode, smart.year, smart.month);
-      } else {
-        const currentState = chargingHistoryStore.get();
-        applyFilter(
-          firstUniqueSessions,
-          currentState.filterMode,
-          currentState.selectedYear,
-          currentState.selectedMonth,
-        );
-      }
-
-      // Show first 100 results immediately when entering tab.
-      chargingHistoryStore.setKey("isLoading", false);
-
       const totalPages = Math.max(1, Math.ceil(totalRecords / PAGE_SIZE));
+      
+      // If there are more pages, fetch them ALL before showing anything
       if (totalPages > 1) {
         chargingHistoryStore.setKey("isLoadingMore", true);
 
@@ -551,11 +532,13 @@ export async function fetchChargingSessions(vinCode?: string, force = false) {
           { length: totalPages - 1 },
           (_, i) => i + 1,
         );
-        const concurrency = 4;
+        
+        // Fetch remaining pages with concurrency
+        const concurrency = 5;
         for (let i = 0; i < remaining.length; i += concurrency) {
           const batch = remaining.slice(i, i + concurrency);
           const batchResults = await Promise.allSettled(
-            batch.map((page) => api.getChargingHistory(page, PAGE_SIZE)),
+            batch.map((page) => api.getChargingHistory(page, PAGE_SIZE, vin)),
           );
 
           for (const result of batchResults) {
@@ -573,19 +556,31 @@ export async function fetchChargingSessions(vinCode?: string, force = false) {
         if (failedPages > 0) {
           chargingHistoryStore.setKey(
             "warning",
-            "Some pages failed to load. Results may be incomplete.",
+            `${failedPages} pages failed to load. Results may be incomplete.`,
           );
         }
       }
 
+      // Now that we have EVERYTHING (or attempted to), update the UI once
       const uniqueSessions = normalizeIdSet(allSessions);
-      const currentState = chargingHistoryStore.get();
-      applyFilter(
-        uniqueSessions,
-        currentState.filterMode,
-        currentState.selectedYear,
-        currentState.selectedMonth,
-      );
+      
+      if (vinChanged) {
+        // For new vehicle, use smart default (Year or Month)
+        const smart = computeSmartDefault(uniqueSessions);
+        applyFilter(uniqueSessions, smart.mode, smart.year, smart.month);
+      } else if (force) {
+        // For manual refresh on same vehicle, prioritize showing "All" as requested
+        applyFilter(uniqueSessions, "all", 0, 0);
+      } else {
+        // Background refresh or regular fetch, preserve current filter
+        const currentState = chargingHistoryStore.get();
+        applyFilter(
+          uniqueSessions,
+          currentState.filterMode,
+          currentState.selectedYear,
+          currentState.selectedMonth,
+        );
+      }
 
       setCachedData(vin, uniqueSessions, totalRecords);
     } catch (e: any) {
@@ -604,6 +599,5 @@ export async function fetchChargingSessions(vinCode?: string, force = false) {
     if (chargingHistoryFetchInFlight.get(vin) === fetchTask) {
       chargingHistoryFetchInFlight.delete(vin);
     }
-    api.vin = prevApiVin;
   }
 }

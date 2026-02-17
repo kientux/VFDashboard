@@ -1,6 +1,6 @@
 import React, { useState, Suspense } from "react";
 import { useStore } from "@nanostores/react";
-import { vehicleStore, fetchFullTelemetry } from "../stores/vehicleStore";
+import { vehicleStore } from "../stores/vehicleStore";
 import DashboardController from "./DashboardController";
 import AuthGate from "./AuthGate";
 import VehicleHeader from "./VehicleHeader";
@@ -10,6 +10,7 @@ import { EnvironmentCard, MapCard } from "./ControlGrid";
 import DigitalTwin from "./DigitalTwin";
 import SystemHealth from "./SystemHealth";
 import MobileNav from "./MobileNav";
+import ErrorBoundary from "./ErrorBoundary";
 
 // Lazy load heavy components
 const TelemetryDrawer = React.lazy(() => import("./TelemetryDrawer"));
@@ -22,12 +23,6 @@ export default function DashboardApp({ vin: initialVin }) {
   const [activeTab, setActiveTab] = useState("vehicle");
   const [isTelemetryDrawerOpen, setIsTelemetryDrawerOpen] = useState(false);
   const [isChargingDrawerOpen, setIsChargingDrawerOpen] = useState(false);
-
-  const handleFullScan = async () => {
-    if (vin) {
-      await fetchFullTelemetry(vin, true);
-    }
-  };
 
   const handleOpenTelemetry = () => {
     setIsTelemetryDrawerOpen(true);
@@ -64,12 +59,16 @@ export default function DashboardApp({ vin: initialVin }) {
                 className={`${activeTab === "energy_env" ? "flex-1 flex flex-col min-h-0 overflow-y-auto md:overflow-visible scrollbar-none" : "hidden md:block"}`}
               >
                 <div className="flex-shrink-0">
-                  <CarStatus />
+                  <ErrorBoundary>
+                    <CarStatus />
+                  </ErrorBoundary>
                 </div>
                 {/* Mobile only: inline charging history below energy */}
                 {activeTab === "energy_env" && (
                   <div className="md:hidden mt-4 bg-white rounded-3xl p-4 shadow-sm border border-gray-100">
-                    <ChargingHistory inline />
+                    <ErrorBoundary>
+                      <ChargingHistory inline />
+                    </ErrorBoundary>
                   </div>
                 )}
               </div>
@@ -77,7 +76,9 @@ export default function DashboardApp({ vin: initialVin }) {
               <div
                 className={`${activeTab === "status" ? "flex-1 block" : "hidden md:flex md:flex-1 md:flex-col"}`}
               >
-                <SystemHealth />
+                <ErrorBoundary>
+                  <SystemHealth />
+                </ErrorBoundary>
               </div>
             </div>
 
@@ -85,7 +86,9 @@ export default function DashboardApp({ vin: initialVin }) {
             <div
               className={`md:col-span-6 relative bg-gray-800/10 rounded-3xl border border-white/5 shadow-2xl backdrop-blur-sm overflow-hidden md:block flex-1 ${activeTab === "vehicle" ? "flex flex-col" : "hidden md:block"}`}
             >
-              <DigitalTwin />
+              <ErrorBoundary>
+                <DigitalTwin />
+              </ErrorBoundary>
             </div>
 
             {/* RIGHT COLUMN: Environment (Top) + Location (Bottom) */}
@@ -94,13 +97,17 @@ export default function DashboardApp({ vin: initialVin }) {
             >
               {/* Environment - PC Only */}
               <div className="hidden md:block">
-                <EnvironmentCard />
+                <ErrorBoundary>
+                  <EnvironmentCard />
+                </ErrorBoundary>
               </div>
               {/* Tab 4: Location */}
               <div
                 className={`${activeTab === "location" ? "flex-1 block" : "hidden md:flex md:flex-1 md:flex-col"}`}
               >
-                <MapCard />
+                <ErrorBoundary>
+                  <MapCard />
+                </ErrorBoundary>
               </div>
             </div>
           </main>

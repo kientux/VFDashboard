@@ -1,5 +1,3 @@
-import React from "react";
-
 // Warning Item Component with Tooltip (hover on desktop, tap on mobile)
 const WarningItem = ({ label, detail }) => (
   <div className="relative group/warn">

@@ -41,7 +41,7 @@ function createVehicleIcon(heading) {
 }
 
 // Station marker icon
-function createStationIcon(available, total) {
+function createStationIcon(available) {
   const isAvailable = available > 0;
   const color = isAvailable ? "#10b981" : "#ef4444";
   const bgColor = isAvailable ? "#ecfdf5" : "#fef2f2";
@@ -154,10 +154,7 @@ export default function InteractiveMap() {
           <Marker
             key={station.stationId}
             position={[station.latitude, station.longitude]}
-            icon={createStationIcon(
-              station.availableConnectors,
-              station.totalConnectors,
-            )}
+            icon={createStationIcon(station.availableConnectors)}
           >
             <Popup maxWidth={280} className="station-popup">
               <ChargingStationPopup station={station} />

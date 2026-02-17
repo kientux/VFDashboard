@@ -3,9 +3,38 @@ import { vehicleStore } from "../stores/vehicleStore";
 
 export default function CarStatus() {
   const data = useStore(vehicleStore);
-  const { battery_level, charging_status } = data;
+  const { battery_level, charging_status, isRefreshing } = data;
   // Normalize charging status (can be boolean or numeric 1=Charging)
   const isCharging = charging_status === 1 || charging_status === true;
+  const numericSoc = Number(battery_level);
+  const numericRange = Number(data.range);
+  const numericTargetSoc = Number(data.target_soc);
+
+  const fullRangeEstimateKm =
+    Number.isFinite(numericSoc) &&
+    numericSoc > 0 &&
+    Number.isFinite(numericRange) &&
+    numericRange >= 0
+      ? Math.round((numericRange * 100) / numericSoc)
+      : null;
+
+  const targetRangeEstimateKm =
+    isCharging &&
+    fullRangeEstimateKm !== null &&
+    Number.isFinite(numericTargetSoc) &&
+    numericTargetSoc > 0
+      ? Math.round((fullRangeEstimateKm * Math.min(numericTargetSoc, 100)) / 100)
+      : null;
+
+  const nominalCapacity = Number(data.battery_nominal_capacity_kwh);
+  const staticCapacity = Number(data.battery_capacity_kwh);
+  const batteryCapacityKwh = Number.isFinite(nominalCapacity) && nominalCapacity > 0
+    ? nominalCapacity
+    : Number.isFinite(staticCapacity) && staticCapacity > 0
+      ? staticCapacity
+      : null;
+  const hasNominalCapacity =
+    Number.isFinite(nominalCapacity) && nominalCapacity > 0;
 
   const formatTime = (mins) => {
     if (!mins) return "--";
@@ -17,7 +46,12 @@ export default function CarStatus() {
   return (
     <div className="h-full">
       {/* Battery Card (Energy) - Stacked Layout */}
-      <div className="relative rounded-3xl bg-white p-5 shadow-sm border border-gray-100 flex flex-col flex-1 min-h-[420px] md:h-[420px] justify-center">
+      <div className="relative rounded-3xl bg-white p-5 shadow-sm border border-gray-100 flex flex-col flex-1 min-h-[420px] md:h-[420px] justify-center overflow-hidden">
+        {/* Shimmer Overlay when Refreshing */}
+        {isRefreshing && (
+          <div className="absolute inset-0 z-20 animate-shimmer opacity-30 pointer-events-none"></div>
+        )}
+
         {/* Header */}
         <div className="w-full mb-4 px-1">
           <div className="flex justify-between items-center">
@@ -40,14 +74,18 @@ export default function CarStatus() {
             </h3>
             <div className="flex items-center gap-2">
               {isCharging && (
-                <span className="text-green-500 animate-pulse text-lg">⚡</span>
+                <span className="text-green-500 animate-bounce-subtle text-lg">
+                  ⚡
+                </span>
               )}
             </div>
           </div>
         </div>
 
         {/* CONTENT WRAPPER - Centered Vertically */}
-        <div className="flex flex-col gap-4">
+        <div
+          className={`flex flex-col gap-4 ${!isRefreshing ? "animate-blur-in" : "opacity-40 transition-opacity"}`}
+        >
           {/* TOP SECTION: Battery Info */}
           <div className="flex flex-col items-center justify-center space-y-2 pb-2">
             {/* Circular Progress + Range Grid */}
@@ -97,9 +135,7 @@ export default function CarStatus() {
                         </span>
                       </>
                     ) : (
-                      <span className="text-3xl font-black text-gray-200 tracking-tighter leading-none">
-                        N/A
-                      </span>
+                      <div className="h-8 w-16 bg-gray-100 animate-shimmer rounded"></div>
                     )}
                   </div>
                 </div>
@@ -131,9 +167,7 @@ export default function CarStatus() {
                     </>
                   ) : (
                     <div className="flex flex-col items-center justify-center h-full gap-1">
-                      <span className="text-[8px] text-gray-300 font-bold uppercase tracking-wider">
-                        SERIAL: N/A
-                      </span>
+                      <div className="h-3 w-20 bg-gray-100 animate-shimmer rounded"></div>
                     </div>
                   )}
                 </div>
@@ -144,18 +178,36 @@ export default function CarStatus() {
                 {/* Range */}
                 <div className="bg-blue-50 px-2 py-3 rounded-2xl flex flex-col items-center justify-center text-center border border-blue-100 shadow-sm hover:scale-105 transition-transform">
                   <p className="text-blue-400 text-[8px] font-bold uppercase tracking-wider mb-0.5">
-                    Est. Range
+                    {isCharging ? "Now Range" : "Est. Range"}
                   </p>
-                  <p
-                    className={`text-xl font-black leading-none ${data.range !== null ? "text-blue-600" : "text-gray-300"}`}
-                  >
-                    {data.range !== null ? data.range : "N/A"}{" "}
-                    <span
-                      className={`text-[10px] font-bold ${data.range !== null ? "text-blue-400" : "text-gray-300"}`}
-                    >
-                      {data.range !== null ? "km" : ""}
-                    </span>
-                  </p>
+                  {data.range !== null ? (
+                    <>
+                      <p className="text-xl font-black leading-none text-blue-600">
+                        {data.range}{" "}
+                        <span className="text-[10px] font-bold text-blue-400">
+                          km
+                        </span>
+                      </p>
+                      {targetRangeEstimateKm !== null && (
+                        <p className="mt-1 text-[9px] font-bold leading-none text-blue-500">
+                          @{Math.round(numericTargetSoc)}%: {targetRangeEstimateKm} km
+                        </p>
+                      )}
+                      {fullRangeEstimateKm !== null && (
+                        <p className="mt-0.5 text-[8px] font-semibold leading-none text-blue-500">
+                          100% est: {fullRangeEstimateKm} km
+                        </p>
+                      )}
+                      {batteryCapacityKwh !== null && (
+                        <p className="mt-0.5 text-[8px] font-semibold leading-none text-blue-400">
+                          Pack: {batteryCapacityKwh.toFixed(1)} kWh
+                          {hasNominalCapacity ? " (nom.)" : ""}
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <div className="h-5 w-12 bg-blue-100 animate-shimmer rounded"></div>
+                  )}
                 </div>
 
                 {/* Health */}
@@ -163,13 +215,13 @@ export default function CarStatus() {
                   <p className="text-gray-400 text-[8px] font-bold uppercase tracking-wider mb-0.5">
                     Health
                   </p>
-                  <p
-                    className={`text-base font-black leading-none ${data.soh_percentage !== null ? "text-emerald-600" : "text-gray-300"}`}
-                  >
-                    {data.soh_percentage !== null
-                      ? `${data.soh_percentage}%`
-                      : "N/A"}
-                  </p>
+                  {data.soh_percentage !== null ? (
+                    <p className="text-base font-black leading-none text-emerald-600">
+                      {data.soh_percentage}%
+                    </p>
+                  ) : (
+                    <div className="h-4 w-10 bg-gray-100 animate-shimmer rounded"></div>
+                  )}
                 </div>
 
                 {/* 12V Battery */}
@@ -181,13 +233,15 @@ export default function CarStatus() {
                   >
                     12V Batt
                   </p>
-                  <p
-                    className={`text-base font-black leading-none ${typeof data.battery_health_12v === "number" && data.battery_health_12v < 50 ? "text-red-600" : typeof data.battery_health_12v === "number" ? "text-emerald-600" : "text-gray-300"}`}
-                  >
-                    {typeof data.battery_health_12v === "number"
-                      ? `${data.battery_health_12v}%`
-                      : "N/A"}
-                  </p>
+                  {typeof data.battery_health_12v === "number" ? (
+                    <p
+                      className={`text-base font-black leading-none ${data.battery_health_12v < 50 ? "text-red-600" : "text-emerald-600"}`}
+                    >
+                      {data.battery_health_12v}%
+                    </p>
+                  ) : (
+                    <div className="h-4 w-10 bg-gray-100 animate-shimmer rounded"></div>
+                  )}
                 </div>
               </div>
             </div>

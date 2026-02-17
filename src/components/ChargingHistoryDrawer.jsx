@@ -1,4 +1,3 @@
-import React from "react";
 import ChargingHistory from "./ChargingHistory";
 
 export default function ChargingHistoryDrawer({ isOpen, onClose }) {

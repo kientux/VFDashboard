@@ -104,7 +104,7 @@ class VinFastAPI {
           return JSON.parse(
             decodeURIComponent(c.substring(nameEQ.length, c.length)),
           );
-        } catch (e) {
+        } catch {
           return null;
         }
       }
@@ -188,7 +188,7 @@ class VinFastAPI {
     this.isLoggedIn = false;
   }
 
-  _getHeaders() {
+  _getHeaders(vinOverride = undefined) {
     // Mobile App Headers (simplified for browser CORS if needed, but keeping standard for now)
     const headers = {
       "Content-Type": "application/json",
@@ -203,7 +203,8 @@ class VinFastAPI {
       "x-timezone": "Asia/Ho_Chi_Minh",
       "x-device-identifier": "vfdashboard-community-edition",
     };
-    if (this.vin) headers["x-vin-code"] = this.vin;
+    const requestVin = vinOverride ?? this.vin;
+    if (requestVin) headers["x-vin-code"] = requestVin;
     if (this.userId) headers["x-player-identifier"] = this.userId;
     return headers;
   }
@@ -236,7 +237,7 @@ class VinFastAPI {
           if (errorData && errorData.message) {
             errorMessage = errorData.message;
           }
-        } catch (e) {
+        } catch {
           // JSON parse failed, stick to status mapping
         }
 
@@ -427,13 +428,15 @@ class VinFastAPI {
   // Endpoint: POST /ccarcharging/api/v1/charging-sessions/search?page=N&size=N
   // Body: {"orderStatus":[3,5,7]} (3=completed, 5=failed, 7=cancelled)
 
-  async getChargingHistory(page = 0, size = 20) {
-    if (!this.vin) throw new Error("VIN is required");
+  async getChargingHistory(page = 0, size = 20, vinOverride = null) {
+    const requestVin = vinOverride ?? this.vin;
+    if (!requestVin) throw new Error("VIN is required");
     const proxyPath = `ccarcharging/api/v1/charging-sessions/search`;
     const url = `/api/proxy/${proxyPath}?region=${this.region}&page=${page}&size=${size}`;
 
     const response = await this._fetchWithRetry(url, {
       method: "POST",
+      headers: this._getHeaders(requestVin),
       body: JSON.stringify({ orderStatus: [3, 5, 7] }),
     });
     if (!response.ok) throw new Error("Failed to fetch charging history");
