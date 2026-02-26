@@ -188,14 +188,14 @@ export default function CarStatus() {
                           km
                         </span>
                       </p>
-                      {targetRangeEstimateKm !== null && (
+                      {targetRangeEstimateKm !== null && Math.round(numericTargetSoc) < 100 && (
                         <p className="mt-1 text-[9px] font-bold leading-none text-blue-500">
                           @{Math.round(numericTargetSoc)}%: {targetRangeEstimateKm} km
                         </p>
                       )}
                       {fullRangeEstimateKm !== null && (
                         <p className="mt-0.5 text-[8px] font-semibold leading-none text-blue-500">
-                          100% est: {fullRangeEstimateKm} km
+                          @100%: {fullRangeEstimateKm} km
                         </p>
                       )}
                       {batteryCapacityKwh !== null && (
