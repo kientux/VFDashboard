@@ -9,12 +9,13 @@
 
 ## 🔄 **Status Update** (February 2026)
 
-> **Dashboard is fully operational!** Both X-HASH and X-HASH-2 authentication have been reverse engineered and implemented.
+> **Dashboard is fully operational with real-time MQTT telemetry!** Both X-HASH and X-HASH-2 authentication have been reverse engineered and implemented. Live vehicle data now streams via MQTT over WebSocket.
 >
 > ✅ **X-HASH + X-HASH-2**: Dual-layer API signing is working on all telemetry endpoints.\
+> ✅ **MQTT Live Telemetry**: Real-time data streaming via AWS IoT Core (battery, doors, tires, location, speed).\
 > ✅ **Deployed**: Running on Cloudflare Pages with server-side proxy.\
 > ⚠️ **Limitation**: SOH (State of Health) battery data is **no longer available** in the API response.\
-> 📚 **Documentation**: [API Endpoints](./docs/api/API_ENDPOINTS.md) | [X-HASH Technical Docs](./docs/api/HASH_ANALYSIS_SUMMARY.md) | [Reverse Engineering Report](./docs/api/REVERSE_ENGINEERING_REPORT.md)\
+> 📚 **Documentation**: [API Endpoints](./docs/api/API_ENDPOINTS.md) | [X-HASH Technical Docs](./docs/api/HASH_ANALYSIS_SUMMARY.md) | [Reverse Engineering Report](./docs/api/REVERSE_ENGINEERING_REPORT.md) | [MQTT Telemetry](./docs/api/MQTT_TELEMETRY.md)\
 > 🌐 **Bilingual docs**: English at `docs/api/`, Vietnamese at `docs/api/vi/`
 
 ---
@@ -29,7 +30,7 @@ Our goal is to create a UI that matches the premium quality of the car itself—
 
 - **Digital Twin Visualizer**: Accurate representation of vehicle status including doors, locks, and tires.
 - **Mobile-First Experience**: Optimized specifically for phone screens with zero scrollbars, fixed viewports, and touch-friendly layouts.
-- **Real-time Telemetry**: Monitoring of Battery SOC, Range, Power consumption, and Charging time.
+- **Real-time Telemetry via MQTT**: Live streaming of Battery SOC, Range, Speed, Charging status, and more via AWS IoT Core WebSocket.
 - **Safety Monitor**: Integrated alerts for Tire Pressure (TPMS), Door Ajar, and Intrusion.
 - **System Health**: Overview of ECU versions (BMS, Gateway, MHU) and FOTA updates.
 - **Responsive Design**: A "Bento Grid" layout that adapts seamlessly from Desktop to Mobile.
@@ -38,7 +39,7 @@ Our goal is to create a UI that matches the premium quality of the car itself—
 
 - **Core**: React (Vite/Astro), Tailwind CSS, Nanostores.
 - **API**: Serverless Proxy (Astro SSR) for CORS & Rate Limiting.
-- **Integration**: Official/Reverse-Engineered VinFast API.
+- **Integration**: Official/Reverse-Engineered VinFast API + MQTT over WebSocket (AWS IoT Core).
 
 ## 🚀 Quick Start
 
@@ -120,6 +121,56 @@ This project was developed based on inspiration and valuable technical documenta
 Selected improvements from community forks are periodically reviewed and backported into this public branch when they align with security, maintainability, and broad community usage.
 
 We warmly welcome all VinFast owners and technology enthusiasts to collaborate and help improve the public dashboard experience.
+
+## 💬 An Open Letter to VinFast's Development Team
+
+Dear VinFast Engineering Team,
+
+First of all -- **thank you** for building great electric vehicles. We love our VinFast cars, and this project exists because we are passionate owners who want to get the most out of our vehicles.
+
+We want to share a few thoughts from the community, with the utmost respect and constructive spirit:
+
+### On API Security Changes
+
+We've noticed frequent changes to API authentication mechanisms (X-HASH, X-HASH-2, endpoint restructuring, etc.). We completely understand the need for security, and we respect that. However, we want to be transparent: with modern AI-assisted development tools (such as GPT-series models and AI coding agents), investigating and adapting to these changes typically takes **no more than 15-30 minutes**. The security-through-obscurity approach does not effectively prevent determined third-party access -- it only slows down the community temporarily while consuming valuable engineering resources on VinFast's side.
+
+### A Better Path Forward: Developer Community
+
+Instead of an ongoing cycle of API changes and community workarounds, we believe there is a **much more exciting opportunity**: **embrace the developer community**.
+
+Many car manufacturers (Tesla, BMW, Mercedes, Hyundai/Kia) have recognized that third-party apps and integrations **increase customer satisfaction and brand loyalty**. Owners who build custom dashboards, home automation integrations, and fleet management tools are your most engaged and loyal customers.
+
+Here are some features the community would love to build -- features that would make VinFast vehicles even more attractive:
+
+- **Home automation integrations** (Home Assistant, Google Home, Apple HomeKit)
+- **Fleet management dashboards** for businesses with multiple VinFast vehicles
+- **Advanced trip planning** with charging station routing optimized for VinFast EVs
+- **Custom widgets and watch complications** for real-time vehicle status
+- **Energy management** integrations with solar panels and home batteries
+- **Community-driven safety features** like shared road hazard reporting
+- **Accessibility tools** for owners with different needs
+
+### Why This Project Exists
+
+VFDashboard was born out of genuine love for VinFast vehicles, combined with a desire for features that the official app does not yet provide. The official app is good and improving -- but the community can move faster on niche features that matter to power users. This is not competition; this is **free R&D and free marketing** from your most passionate customers.
+
+### Our Proposal
+
+We would be thrilled if VinFast considered:
+
+1. **A public API program** (even read-only) with proper API keys and rate limits
+2. **Developer documentation** for vehicle telemetry and control endpoints
+3. **A developer community forum** where enthusiasts can collaborate with VinFast engineers
+4. **OAuth-based third-party app authorization** so owners can safely grant access to apps they trust
+
+This would transform the current situation from an adversarial dynamic into a **collaborative ecosystem** that benefits everyone -- VinFast, owners, and the broader EV community.
+
+We are building in the open, with good intentions. We hope to work **with** you, not around you.
+
+With respect and admiration,\
+**The VFDashboard Community**
+
+---
 
 ## 📜 License
 

@@ -2,6 +2,7 @@ import { map } from "nanostores";
 import { api } from "../services/api";
 import { DEFAULT_LOCATION } from "../constants/vehicle";
 import { resetRefreshTimer, setRefreshing } from "./refreshTimerStore";
+import { getMqttClient } from "../services/mqttClient";
 
 export interface VehicleInfo {
   vinCode: string;
@@ -383,6 +384,46 @@ const parseBatteryCapacityKwh = (vehicleInfo: any): number | null => {
   return Number.isFinite(batteryCapacity) ? batteryCapacity : null;
 };
 
+const CACHE_TTL_MS = 5 * 60 * 1000;
+const TELEMETRY_SIGNALS: Array<keyof VehicleState> = [
+  "battery_level",
+  "range",
+  "speed",
+  "odometer",
+  "remaining_charging_time",
+  "battery_health_12v",
+  "soh_percentage",
+  "tire_pressure_fl",
+  "tire_pressure_fr",
+  "tire_pressure_rl",
+  "tire_pressure_rr",
+  "battery_capacity_kwh",
+  "latitude",
+  "longitude",
+  "outside_temp",
+  "inside_temp",
+];
+
+const hasTelemetryValues = (data: Partial<VehicleState> | undefined | null) => {
+  if (!data) return false;
+
+  const lastUpdated = data.lastUpdated;
+  if (typeof lastUpdated !== "number" || !Number.isFinite(lastUpdated)) return false;
+  const now = Date.now();
+  if (lastUpdated > now + 5 * 60 * 1000) return false;
+  if (now - lastUpdated > CACHE_TTL_MS) return false;
+
+  return TELEMETRY_SIGNALS.some((key) => {
+    const value = data[key];
+    if (value === null || value === undefined || value === "") return false;
+    if (typeof value === "number" && Number.isNaN(value)) return false;
+    if (typeof value === "number" && Number.isFinite(value)) return true;
+    if (typeof value === "string" && value !== "--" && value.trim() !== "") return true;
+    if (typeof value === "boolean") return true;
+    return false;
+  });
+};
+
 const getVehicleBaseState = (
   vehicleInfo: any,
   current: VehicleState,
@@ -426,8 +467,8 @@ export const switchVehicle = async (targetVin: string) => {
   // 3. Hydrate from Cache if available
   const cachedData = current.vehicleCache[targetVin] || {};
 
-  // Check if cache has telemetry (indicated by lastUpdated)
-  const hasTelemetry = !!cachedData.lastUpdated;
+  // Only skip refresh when cache still has fresh, real telemetry values
+  const hasTelemetry = hasTelemetryValues(cachedData);
 
   // Merge: Current State -> Reset Telemetry -> Base State -> Cached Data
   vehicleStore.set({
@@ -439,7 +480,14 @@ export const switchVehicle = async (targetVin: string) => {
     isRefreshing: !hasTelemetry, // Only show loading if we don't have telemetry
   });
 
-  // 4. Trigger Background Refresh (Only if no telemetry in cache)
+  // 4. Switch MQTT subscription to new VIN
+  try {
+    await getMqttClient().switchVin(targetVin);
+  } catch (err) {
+    console.warn("switchVehicle: MQTT switch failed", err);
+  }
+
+  // 5. Trigger Background Refresh (Only if no telemetry in cache)
   if (!hasTelemetry) {
     fetchTelemetry(targetVin);
   }
@@ -727,4 +775,11 @@ export const fetchVehicles = async (): Promise<string | null> => {
     console.error("Fetch Vehicles Error", e);
     return null;
   }
+};
+
+// --- MQTT Live Updates ---
+
+export const updateFromMqtt = (vin: string, parsedData: Partial<VehicleState>) => {
+  if (!vin || !parsedData || Object.keys(parsedData).length === 0) return;
+  updateVehicleData({ ...parsedData, vin } as Partial<VehicleState>);
 };

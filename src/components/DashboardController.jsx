@@ -5,16 +5,40 @@ import {
   fetchUser,
   fetchVehicles,
   vehicleStore,
+  updateFromMqtt,
 } from "../stores/vehicleStore";
 import { fetchChargingSessions } from "../stores/chargingHistoryStore";
 import { REFRESH_INTERVAL } from "../stores/refreshTimerStore";
+import { getMqttClient, destroyMqttClient } from "../services/mqttClient";
+import { mqttStore } from "../stores/mqttStore";
+import { CORE_TELEMETRY_ALIASES } from "../config/vinfast";
+import staticAliasMap from "../config/static_alias_map.json";
+
+// Fallback polling interval when MQTT is connected (30 minutes)
+const MQTT_FALLBACK_INTERVAL = 30 * 60 * 1000;
 
 export default function DashboardController({ vin: initialVin }) {
   const isMounted = useRef(true);
   const pollingInFlight = useRef(false);
 
+  // Init Effect
   useEffect(() => {
     isMounted.current = true;
+
+    // Set MQTT callbacks EARLY — before fetchVehicles which triggers
+    // switchVehicle → switchVin → connect(). Without this, MQTT connects
+    // but onTelemetryUpdate/onConnected are null so messages are ignored
+    // and registerResources is never called.
+    const mqttClient = getMqttClient();
+    mqttClient.onTelemetryUpdate = (mqttVin, parsed) => {
+      if (isMounted.current) {
+        updateFromMqtt(mqttVin, parsed);
+      }
+    };
+    mqttClient.onConnected = (connectedVin) => {
+      if (!isMounted.current) return;
+      api.registerResources(connectedVin, buildCoreResources());
+    };
 
     const init = async () => {
       let targetVin = initialVin || vehicleStore.get().vin;
@@ -24,7 +48,7 @@ export default function DashboardController({ vin: initialVin }) {
 
       // If no VIN, fetch it
       if (!targetVin) {
-        // fetchVehicles automatically calls switchVehicle -> fetchTelemetry
+        // fetchVehicles calls switchVehicle → switchVin → connect (MQTT starts here)
         targetVin = await fetchVehicles();
         if (!isMounted.current) return;
       } else {
@@ -47,16 +71,30 @@ export default function DashboardController({ vin: initialVin }) {
         window.location.href = "/login";
         return;
       }
+
+      // Start MQTT if not already started by switchVehicle
+      if (targetVin && isMounted.current) {
+        const mqttState = mqttStore.get();
+
+        const shouldStartMqtt =
+          mqttClient.vin !== targetVin ||
+          (mqttState.status !== "connected" && mqttState.status !== "connecting");
+
+        if (shouldStartMqtt) {
+          mqttClient.connect(targetVin);
+        }
+      }
     };
 
     init();
 
     return () => {
       isMounted.current = false;
+      destroyMqttClient();
     };
-  }, [initialVin]); // Only run on load or if SSR vin changes
+  }, [initialVin]);
 
-  // Polling Effect
+  // Polling Effect (fallback when MQTT is connected, primary otherwise)
   useEffect(() => {
     const poll = async () => {
       const currentVin = vehicleStore.get().vin || initialVin;
@@ -70,13 +108,40 @@ export default function DashboardController({ vin: initialVin }) {
       }
     };
 
-    // Polling Interval: 5 hours (18000000 ms)
+    // Use longer interval when MQTT is connected
+    const mqttConnected = mqttStore.get().status === "connected";
+    const intervalMs = mqttConnected ? MQTT_FALLBACK_INTERVAL : REFRESH_INTERVAL;
+
     const interval = setInterval(() => {
       poll();
-    }, REFRESH_INTERVAL);
+    }, intervalMs);
 
-    return () => clearInterval(interval);
+    // Re-evaluate interval when MQTT status changes
+    const unsubscribe = mqttStore.subscribe(() => {
+      // Status change will cause re-render via store subscription
+    });
+
+    return () => {
+      clearInterval(interval);
+      unsubscribe();
+    };
   }, [initialVin]);
 
   return null; // Headless
+}
+
+// Build core resource list for list_resource registration
+function buildCoreResources() {
+  const resources = [];
+  CORE_TELEMETRY_ALIASES.forEach((alias) => {
+    const m = staticAliasMap[alias];
+    if (m) {
+      resources.push({
+        objectId: m.objectId,
+        instanceId: m.instanceId,
+        resourceId: m.resourceId,
+      });
+    }
+  });
+  return resources;
 }

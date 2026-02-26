@@ -10,6 +10,7 @@ import {
   formatCountdown,
 } from "../stores/refreshTimerStore";
 import { api } from "../services/api";
+import { mqttStore } from "../stores/mqttStore";
 import AboutModal from "./AboutModal";
 
 // Generate a local SVG avatar to avoid third-party avatar requests.
@@ -153,6 +154,7 @@ const WeatherIcon = ({ temp, code }) => {
 export default function VehicleHeader({ onOpenTelemetry, onOpenCharging }) {
   const vehicle = useStore(vehicleStore);
   const refreshTimer = useStore(refreshTimerStore);
+  const mqtt = useStore(mqttStore);
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [toolsOpen, setToolsOpen] = React.useState(false);
   const [showAbout, setShowAbout] = React.useState(false);
@@ -277,16 +279,39 @@ export default function VehicleHeader({ onOpenTelemetry, onOpenCharging }) {
             </span>
           </div>
 
-          {/* Countdown Timer */}
+          {/* Countdown Timer / MQTT Status */}
           <div className="hidden md:flex flex-col items-start leading-none pl-2 pr-1 border-l border-gray-200">
-            <span className="text-[8px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">
-              Next Refresh
-            </span>
-            <span className="text-xs font-mono font-bold text-blue-600 tabular-nums leading-none">
-              {refreshTimer.isRefreshing
-                ? "Refreshing..."
-                : formatCountdown(refreshTimer.timeUntilRefresh)}
-            </span>
+            {mqtt.status === "connected" ? (
+              <>
+                <span className="text-[8px] text-green-600 uppercase font-bold tracking-wider mb-0.5">
+                  Live
+                </span>
+                <span className="text-xs font-mono font-bold text-green-600 tabular-nums leading-none flex items-center gap-1">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                  MQTT
+                </span>
+              </>
+            ) : mqtt.status === "connecting" ? (
+              <>
+                <span className="text-[8px] text-amber-500 uppercase font-bold tracking-wider mb-0.5">
+                  Connecting
+                </span>
+                <span className="text-xs font-mono font-bold text-amber-500 tabular-nums leading-none">
+                  MQTT...
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="text-[8px] text-gray-400 uppercase font-bold tracking-wider mb-0.5">
+                  Next Refresh
+                </span>
+                <span className="text-xs font-mono font-bold text-blue-600 tabular-nums leading-none">
+                  {refreshTimer.isRefreshing
+                    ? "Refreshing..."
+                    : formatCountdown(refreshTimer.timeUntilRefresh)}
+                </span>
+              </>
+            )}
           </div>
         </button>
 

@@ -387,6 +387,34 @@ class VinFastAPI {
     return resources;
   }
 
+  async registerResources(vin, requestObjects) {
+    if (!vin || !requestObjects || requestObjects.length === 0) return;
+    const proxyPath = `ccaraccessmgmt/api/v1/telemetry/${vin}/list_resource`;
+    const url = `/api/proxy/${proxyPath}?region=${this.region}`;
+    try {
+      const response = await this._fetchWithRetry(url, {
+        method: "POST",
+        body: JSON.stringify(requestObjects),
+      });
+
+      if (!response.ok) {
+        const body = await response.text();
+        console.warn(
+          "registerResources failed:",
+          response.status,
+          body || "no body",
+        );
+        return;
+      }
+
+      if (process.env.NODE_ENV !== "production") {
+        console.log("registerResources ok:", vin);
+      }
+    } catch (e) {
+      console.warn("registerResources failed:", e);
+    }
+  }
+
   async getRawTelemetry(vin, requestObjects) {
     if (vin) this.vin = vin;
     if (!this.vin) throw new Error("VIN is required");

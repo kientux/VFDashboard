@@ -29,14 +29,16 @@ export const REGIONS = {
 export const API_HEADERS = {
   "Content-Type": "application/json",
   Accept: "application/json",
-  "x-service-name": "CAPP",
-  "x-app-version": "1.10.3",
-  "x-device-platform": "android",
-  "x-device-family": "VFDashboard",
-  "x-device-os-version": "Community",
-  "x-device-locale": "vi-VN",
-  "x-timezone": "Asia/Ho_Chi_Minh",
-  "x-device-identifier": "vfdashboard-community-edition",
+  "X-SERVICE-NAME": "CAPP",
+  "X-APP-VERSION": "2.17.5",
+  "X-Device-Platform": "android",
+  "X-Device-Family": "SM-F946B",
+  "X-Device-OS-Version": "android 14",
+  "X-Device-Locale": "vi-VN",
+  "X-Timezone": "Asia/Ho_Chi_Minh",
+  "X-Device-Identifier": "vfdashboard-community-edition",
+  "X-IMEI": "",
+  "User-Agent": "android - vfdashboard-community-edition - 2.17.5",
 };
 
 export const CORE_TELEMETRY_ALIASES = [
@@ -107,5 +109,18 @@ export const FALLBACK_TELEMETRY_RESOURCES = [
   "/34201/0/0",
   "/34202/0/0",
 ];
+
+// MQTT Configuration (from APK local-configuration.json)
+export const MQTT_CONFIG = {
+  vn: {
+    endpoint: "prod.iot.connected-car.vinfast.vn",
+    fallbackEndpoint: "a192815p17rdy4-ats.iot.ap-southeast-1.amazonaws.com",
+    region: "ap-southeast-1",
+    cognitoPoolId: "ap-southeast-1:c6537cdf-92dd-4b1f-99a8-9826f153142a",
+    cognitoLoginProvider: "vin3s.au.auth0.com",
+    heartbeatInterval: 120000, // 2 minutes
+    keepAlive: 300, // seconds
+  },
+};
 
 export const STATIC_ALIAS_MAP_EXPORT = staticAliasMap;

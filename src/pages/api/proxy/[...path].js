@@ -21,19 +21,21 @@ const SIGNED_PATH_PREFIXES = ["ccaraccessmgmt/", "ccarcharging/"];
 
 /**
  * Generate X-HASH for VinFast API request
- * Algorithm: HMAC-SHA256(secretKey, message) -> Base64
- * From HMACInterceptor: method_path_[vin_]secret_timestamp (lowercase)
+ * Reverse-engineered from HMACInterceptor (app v2.17.5)
+ *
+ * Algorithm: HMAC-SHA256(key, message) -> Base64
+ * Message: method_/path_[vin_]key_timestamp (all lowercased)
+ * Key: "Vinfast@2025"
  */
 function generateXHash(method, apiPath, vin, timestamp, secretKey) {
-  // Remove query string from path
   const pathWithoutQuery = apiPath.split("?")[0];
 
-  // Ensure path starts with /
+  // HMACInterceptor uses request.url().encodedPath() which includes leading /
   const normalizedPath = pathWithoutQuery.startsWith("/")
     ? pathWithoutQuery
     : "/" + pathWithoutQuery;
 
-  // Build message: method_path_[vin_]secret_timestamp
+  // Build: method_path_[vin_]secret_timestamp
   const parts = [method, normalizedPath];
   if (vin) {
     parts.push(vin);
@@ -41,28 +43,35 @@ function generateXHash(method, apiPath, vin, timestamp, secretKey) {
   parts.push(secretKey);
   parts.push(String(timestamp));
 
-  // Join with underscore and lowercase
   const message = parts.join("_").toLowerCase();
 
-  // HMAC-SHA256
   const hmac = crypto.createHmac("sha256", secretKey);
   hmac.update(message);
-
-  // Base64 encode
   return hmac.digest("base64");
 }
 
 /**
  * Generate X-HASH-2 for VinFast API request
- * Reverse-engineered from libsecure.so (VFCrypto.signRequest)
+ * Reverse-engineered from CryptoInterceptor + libsecure.so (app v2.17.5)
  *
- * Algorithm:
- *   1. Strip leading "/" from path
- *   2. Replace all "/" with "_" in path
- *   3. Concatenate: platform_[vinCode_]identifier_path_method_timestamp
- *   4. Lowercase the entire string
- *   5. HMAC-SHA256 with key "ConnectedCar@6521" (from FUN_0012758c)
- *   6. Base64 encode result
+ * Flow in app:
+ *   1. TokenInterceptor sets all headers (X-Device-Platform, X-TIMESTAMP, etc.)
+ *   2. CryptoInterceptor creates Message object from request headers
+ *   3. Message serialized to JSON via Gson
+ *   4. JSON passed to native VFCrypto.signRequest(json)
+ *   5. Native code: cJSON_Parse → extract 6 fields → build message → toLower → HMAC-SHA256
+ *
+ * Native signRequest extracts these fields from JSON:
+ *   - X-Device-Platform
+ *   - X-Vin-Code (nullable)
+ *   - X-Device-Identifier
+ *   - X-PATH (= request.url().encodedPath())
+ *   - X-METHOD (= request.method())
+ *   - X-TIMESTAMP
+ *
+ * Path processing: strip leading "/", replace "/" with "_"
+ * Message: platform_[vinCode_]identifier_path_method_timestamp (lowercased)
+ * Key: "ConnectedCar@6521" (17 bytes, obfuscated char-by-char in native code)
  */
 function generateXHash2({
   platform,
@@ -72,16 +81,16 @@ function generateXHash2({
   method,
   timestamp,
 }) {
-  // Step 1: Strip leading "/" from path
+  // Native code: strip leading "/"
   let normalizedPath = path;
   if (normalizedPath.startsWith("/")) {
     normalizedPath = normalizedPath.substring(1);
   }
 
-  // Step 2: Replace "/" with "_" in path
+  // Native code: replace "/" with "_"
   normalizedPath = normalizedPath.replace(/\//g, "_");
 
-  // Step 3: Build message parts in order from native code
+  // Build message: platform_[vinCode_]identifier_path_method_timestamp
   const parts = [platform];
   if (vinCode) {
     parts.push(vinCode);
@@ -91,16 +100,14 @@ function generateXHash2({
   parts.push(method);
   parts.push(String(timestamp));
 
-  // Step 4: Join with "_" and lowercase
+  // Native code: toLower the entire assembled string
   const message = parts.join("_").toLowerCase();
 
-  // Step 5: HMAC-SHA256 with native secret key
+  // HMAC-SHA256 with native key (from libsecure.so char-by-char build)
   const hash2Key = "ConnectedCar@6521";
   const hmac = crypto.createHmac("sha256", hash2Key);
   hmac.update(message);
-  const hash2 = hmac.digest("base64");
-
-  return hash2;
+  return hmac.digest("base64");
 }
 
 export const ALL = async ({ request, params, cookies, locals }) => {
@@ -145,14 +152,13 @@ export const ALL = async ({ request, params, cookies, locals }) => {
     requestBody = await request.text();
   }
 
-  // Only telemetry endpoints require X-HASH and X-HASH-2 signing.
-  // Other endpoints (user-vehicle, vehicle-model) only need Bearer token.
   const requiresSigning = SIGNED_PATH_PREFIXES.some((prefix) =>
     apiPath.startsWith(prefix),
   );
 
+  // Build headers matching TokenInterceptor header casing exactly
   const proxyHeaders = {
-    ...API_HEADERS, // standard headers
+    ...API_HEADERS,
     "Content-Type": "application/json",
     Authorization: `Bearer ${accessToken}`,
   };
@@ -195,9 +201,9 @@ export const ALL = async ({ request, params, cookies, locals }) => {
     );
 
     const xHash2 = generateXHash2({
-      platform: API_HEADERS["x-device-platform"] || "android",
+      platform: API_HEADERS["X-Device-Platform"] || "android",
       vinCode: vinHeader || null,
-      identifier: API_HEADERS["x-device-identifier"] || "",
+      identifier: API_HEADERS["X-Device-Identifier"] || "",
       path: "/" + apiPath,
       method: request.method,
       timestamp: xTimestamp,
@@ -211,8 +217,8 @@ export const ALL = async ({ request, params, cookies, locals }) => {
     );
   }
 
-  if (vinHeader) proxyHeaders["x-vin-code"] = vinHeader;
-  if (playerHeader) proxyHeaders["x-player-identifier"] = playerHeader;
+  if (vinHeader) proxyHeaders["X-Vin-Code"] = vinHeader;
+  if (playerHeader) proxyHeaders["X-Player-Identifier"] = playerHeader;
 
   const init = {
     method: request.method,
