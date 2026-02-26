@@ -69,6 +69,19 @@ function formatCurrency(amount) {
   }
 }
 
+function formatEnergy(value, decimals = 1) {
+  const n = safeNumber(value);
+  if (Number.isNaN(n)) return "0";
+  try {
+    return new Intl.NumberFormat("vi-VN", {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    }).format(n);
+  } catch {
+    return decimals === 0 ? Math.round(n).toLocaleString() : n.toFixed(decimals);
+  }
+}
+
 function formatTotalTime(ms) {
   const val = safeNumber(ms);
   if (val <= 0) return "0h";
@@ -199,7 +212,7 @@ function SessionCard({ session, maxEnergy, index }) {
             />
           </svg>
           <span className="text-sm font-bold text-gray-800">
-            {kWh.toFixed(1)} kWh
+            {formatEnergy(kWh, 1)} kWh
           </span>
         </div>
 
@@ -535,7 +548,7 @@ export default function ChargingHistory({ inline = false }) {
         >
           <AnimatedStat
             label="Energy"
-            value={`${totalKWh.toFixed(0)} kWh`}
+            value={`${formatEnergy(totalKWh, 0)} kWh`}
             colorClass="text-green-800"
             bgClass="bg-green-50"
             isLoading={store.isLoading}
