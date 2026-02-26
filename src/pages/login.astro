@@ -9,6 +9,9 @@ import '../styles/global.css';
 const optimizedBg = await getImage({src: vf9Interior, format: 'webp', width: 1920, quality: 80});
 ---
 
-<Layout title="Login - VinFast Dashboard">
+<Layout
+	title="VinFast Dashboard — Real-time EV Telemetry for VinFast EVs"
+	description="Open-source real-time dashboard for VinFast electric vehicles. Live battery SOC, tire pressure (TPMS), charging history, GPS location, Digital Twin visualization, and vehicle diagnostics via MQTT. Built by VF9 Club Vietnam."
+>
     <Login client:only="react" bgImage={optimizedBg.src} />
 </Layout>

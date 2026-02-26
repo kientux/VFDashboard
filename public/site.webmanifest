@@ -1,6 +1,9 @@
 {
-  "name": "VFDashboard",
-  "short_name": "Vinfast",
+  "name": "VinFast Dashboard",
+  "short_name": "VF Dashboard",
+  "description": "Real-time EV telemetry dashboard for VinFast vehicles",
+  "start_url": "/",
+  "scope": "/",
   "icons": [
     {
       "src": "/web-app-manifest-192x192.png",
