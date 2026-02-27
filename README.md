@@ -7,6 +7,22 @@
 
 ---
 
+> ### 🇻🇳 Thông tin dành cho người dùng Việt Nam
+>
+> **VFDashboard** ban đầu là công cụ nhỏ phục vụ nhóm anh em chủ xe VF9, không ngờ được lan truyền rộng. Xin chia sẻ một số điểm để anh em yên tâm:
+>
+> - **Không chính thức, không liên quan đến VinFast.** Website chỉ sử dụng tài khoản VinFast của bạn để kết nối và lấy dữ liệu — tương tự cách app chính thức hoạt động. Hệ thống VinFast chạy trên AWS, bảo mật tốt.
+> - **Thông tin mang tính tham khảo.** Dữ liệu được lấy trực tiếp từ VinFast nhưng không có giá trị chính thức để làm việc với hãng.
+> - **Phi lợi nhuận, không scam.** Toàn bộ mã nguồn công khai tại đây. Anh em lo lắng về bảo mật có thể tự clone về máy chạy ở local (`npm install && npm run dev`) và dùng AI để đánh giá code.
+> - **Link duy nhất:** [**dashboard.vf9.club**](https://dashboard.vf9.club) — không có link nào khác. Khuyến khích chạy local để trải nghiệm ổn định nhất.
+> - **Lỗi không kết nối được?** Do server VinFast giới hạn tần suất truy cập (rate limit) từ proxy, không phải do hệ thống quá tải.
+>
+> Giao lưu cùng tác giả: [**ANH EM VF9 - VF9 CLUB**](https://www.facebook.com/groups/706124277686588/)
+>
+> *📄 English documentation below.*
+
+---
+
 ## 🔄 **Status Update** (February 2026)
 
 > **Dashboard is fully operational with real-time MQTT telemetry!** All vehicle data streams live via MQTT over WebSocket — first data arrives ~500ms after connect.
