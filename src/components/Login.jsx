@@ -259,13 +259,19 @@ export default function Login({ bgImage }) {
         {/* About / Community */}
         <p className="relative text-center text-[11px] leading-relaxed text-white/70 px-2">
           Dự án mã nguồn mở, phi lợi nhuận — chia sẻ đam mê công nghệ xe điện VinFast.
-          {" "}Giao lưu cùng tác giả tại sân chơi dành riêng cho chủ xe VF9:{" "}
+          {" "}Trao đổi về dự án tại{" "}
           <a
             href="https://www.facebook.com/groups/706124277686588/"
             target="_blank"
             rel="noopener noreferrer"
             className="font-semibold text-white hover:text-blue-300 underline underline-offset-2 transition-colors"
           >ANH EM VF9 - VF9 CLUB</a>.
+        </p>
+
+        {/* Trademark Disclaimer */}
+        <p className="relative text-center text-[10px] leading-relaxed text-white/40 px-4">
+          Not affiliated with, endorsed, or sponsored by VinFast.
+          VinFast is a registered trademark of VinFast Trading and Production JSC.
         </p>
 
         {/* Footer: Github - Text - VF9 Club */}
