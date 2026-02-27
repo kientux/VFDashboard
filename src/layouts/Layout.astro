@@ -14,6 +14,7 @@ const {
 const canonicalURL = new URL(Astro.url.pathname, "https://dashboard.vf9.club");
 const ogImageURL = new URL(ogImage, "https://dashboard.vf9.club").href;
 
+import Analytics from '@vercel/analytics/astro';
 import '../styles/global.css';
 ---
 
@@ -61,6 +62,9 @@ import '../styles/global.css';
 		<link rel="shortcut icon" href="/favicon.ico" />
 		<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 		<link rel="manifest" href="/site.webmanifest" />
+
+		<!-- Vercel Web Analytics -->
+		<Analytics />
 
 		<!-- Structured Data (JSON-LD) -->
 		<script type="application/ld+json" set:html={JSON.stringify({
